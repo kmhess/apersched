@@ -5,6 +5,7 @@ The program reads in a list of possible pointings.  It then calls the module atd
 
 ## Usage:
 python make_imaging_sched.py
+
 python make_timing_sched.py
 
 ## Notes:
