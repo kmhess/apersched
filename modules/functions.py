@@ -28,7 +28,7 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime):
     writer.writerow(all_cols)
 
 
-def observe_calibrator(obstimeUTC, obstime=15):
+def observe_calibrator(obstimeUTC, obstime=20):
     return obstimeUTC + datetime.timedelta(minutes=obstime)
 
 

@@ -2,7 +2,7 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 
 __author__ = "Kelley M. Hess"
-__date__ = "$19-feb-2019 16:00:00$"
+__date__ = "$21-feb-2019 16:00:00$"
 __version__ = "0.3"
 
 import csv
@@ -75,8 +75,6 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
     # Get first position or objects that are close to current observing horizon:
     currentLST = Time(obstimeUTC).sidereal_time('apparent', westerbork().lon)
     proposed_ra = (currentLST + Longitude('6h')).wrap_at(360 * u.deg)
-    slew_test = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],  # seconds of time
-                              [proposed_ra.radian, telescope_position.dec.radian])
 
     avail_fields = apertif_fields[apertif_fields['weights'] > 0]
     if closest_field:
@@ -111,7 +109,7 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
                                  [SkyCoord(first_field['hmsdms']).ra.radian,
                                   SkyCoord(first_field['hmsdms']).dec.radian])
     new_obstimeUTC = obstimeUTC + datetime.timedelta(seconds=slew_seconds) + datetime.timedelta(seconds=targ_wait)
-    after_target = observe_target(apertif_fields, new_obstimeUTC, first_field['name'])
+    after_target = observe_target(apertif_fields, new_obstimeUTC, first_field['name'], obstime=11.5)
     write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstimeUTC, after_target)
     print("Scan {} observed {}.".format(i, first_field['hmsdms']))
     return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
@@ -120,21 +118,22 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
 
 # User supplied **UTC** start time:
 starttimeUTC = datetime.datetime.utcnow().replace(microsecond=0)  # Keep this as a datetime.time object!!
-starttimeUTC = datetime.datetime(2019, 1, 7, 16, 0, 0)  # Start observing at 5 pm Local (4 UTC) on 07 Jan 2019.
+starttimeUTC = datetime.datetime(2019, 3, 1, 16, 0, 0)  # Start observing at 5 pm Local (4 UTC) on 01 Mar 2019.
 obstimeUTC = starttimeUTC
 
+# This functionality needs more testing
 # User supplied field (will choose nearest survey pointing from file later):
 #start_pos = SkyCoord.from_name('Abell 262')
 start_pos = None
 
 # Filename for the csv file of observed fields:
-csv_filename = 'my_output_file.csv'
+csv_filename = 'imaging_output_file.csv'
 
 # Filename for the map of observed fields:
-filename = 'temp.png'
+filename = 'imaging_map.png'
 
 # User supplied number of days for which to calculate schedule
-obs_length = 0.5     # number of days to calculate observations for (can be a float)
+obs_length = 3.0     # number of days to calculate observations for (can be a float)
 dowait = 5           # number of minutes to wait before checking source availability
 
 # Load all-sky pointing file and select the pointings with the label for the appropriate survey:
@@ -144,7 +143,7 @@ try:
 except NameError:
     # labels: l=lofar; m=medium-deep; s=shallow; t=timing; g=Milky Way +/-5 in galactic latitude
     #         h=NCP that will be covered with hexagonal compound beam arrangement
-    fields = Table(ascii.read('all_pointings.v4.13dec18.txt', format='fixed_width'))
+    fields = Table(ascii.read('./ancillary_data/all_pointings.v4.13dec18.txt', format='fixed_width'))
     apertif_fields = fields[(fields['label'] == 'l') | (fields['label'] == 'm') | (fields['label'] == 's')]
     weights = np.zeros(len(apertif_fields))
     weights[apertif_fields['label'] == 's'] = 1
@@ -154,19 +153,20 @@ except NameError:
 else:
     print("Pointings already loaded. '> del apertif_fields' if want to reset weights.")
 
+print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
 print("Number of Apertif fields are: {}".format(len(apertif_fields)))
 
-# Retrieve names of observations from ATDB (excludes calibrator scans)
-observations = atdbquery.atdbquery(obs_mode='imaging')
-imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
-               if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
-               and (dict(observations[i])['name'][0:2] != 'CT')]
-# Adjust 'weights' field for objects that have been previously observed:
-for obs in imaging_obs:
-    if obs in fields['name']:
-        i=np.where(apertif_fields['name'] == obs)
-        apertif_fields['weights'][i] -= 1
+# # Retrieve names of observations from ATDB (excludes calibrator scans)
+# observations = atdbquery.atdbquery(obs_mode='imaging')
+# imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
+#                if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
+#                and (dict(observations[i])['name'][0:2] != 'CT')]
+# # Adjust 'weights' field for objects that have been previously observed:
+# for obs in imaging_obs:
+#     if obs in fields['name']:
+#         i=np.where(apertif_fields['name'] == obs)
+#         apertif_fields['weights'][i] -= 1
 
 # Estimate the telescope starting position as on the meridian (approximately parked)
 telescope_position = SkyCoord(ra=Time(obstimeUTC).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
@@ -179,6 +179,7 @@ names = ['3C138', '3C147', 'CTD93']
 calibrators = [SkyCoord.from_name(name) for name in names]
 
 print("Starting observations! UTC: " + str(obstimeUTC))
+print("Calculating schedule for the following " + str(obs_length) + " days.")
 
 if start_pos:
     sep = start_pos.separation(SkyCoord(np.array(apertif_fields['hmsdms'])))
@@ -224,6 +225,9 @@ with open(csv_filename, 'w') as csvfile:
 
 print("Ending observations! UTC: " + str(obstimeUTC))
 print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait, total_wait*60./(obstimeUTC-starttimeUTC).total_seconds()*100))
+print("The schedule has been written to " + csv_filename)
+print("A map of the observed fields has been written to " + filename)
+print("##################################################################\n")
 
 # Create and save a figure of all pointings selected for this survey, and which have been observed.
 plt.figure(figsize=[8, 8])

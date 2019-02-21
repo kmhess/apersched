@@ -2,7 +2,7 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 
 __author__ = "Kelley M. Hess"
-__date__ = "$20-feb-2019 16:00:00$"
+__date__ = "$21-feb-2019 16:00:00$"
 __version__ = "0.3"
 
 import csv
@@ -76,8 +76,6 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
     # Get first position or objects that are close to current observing horizon:
     currentLST = Time(obstimeUTC).sidereal_time('apparent', westerbork().lon)
     proposed_ra = (currentLST + Longitude('1.5h')).wrap_at(360 * u.deg)
-    slew_test = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],  # seconds of time
-                              [proposed_ra.radian, telescope_position.dec.radian])
 
     avail_fields = timing_fields[timing_fields['weights'] > 0]
     if closest_field:
@@ -90,7 +88,7 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
     while not np.any((availability < 0.5) & (availability > -0.5)):
         targ_wait += dowait
         total_wait += dowait
-        new_obstimeUTC = wait_for_rise(obstimeUTC)
+        new_obstimeUTC = wait_for_rise(obstimeUTC, waittime=dowait)
         obstimeUTC = new_obstimeUTC
         currentLST = Time(obstimeUTC).sidereal_time('apparent', westerbork().lon)
         proposed_ra = (currentLST + Longitude('1.5h')).wrap_at(360 * u.deg)
@@ -112,7 +110,7 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
                                  [SkyCoord(first_field['hmsdms']).ra.radian,
                                   SkyCoord(first_field['hmsdms']).dec.radian])
     new_obstimeUTC = obstimeUTC + datetime.timedelta(seconds=slew_seconds) + datetime.timedelta(seconds=targ_wait)
-    after_target = observe_target(timing_fields, new_obstimeUTC, first_field['name'])
+    after_target = observe_target(timing_fields, new_obstimeUTC, first_field['name'], obstime=3)
     write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstimeUTC, after_target)
     print("Scan {} observed {}.".format(i, first_field['hmsdms']))
     return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
@@ -121,9 +119,10 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
 
 # User supplied **UTC** start time:
 starttimeUTC = datetime.datetime.utcnow().replace(microsecond=0)  # Keep this as a datetime.time object!!
-starttimeUTC = datetime.datetime(2019, 1, 1, 8, 0, 0)  # Start observing at 9 am Local (8 UTC) on 01 Jan 2019.
+starttimeUTC = datetime.datetime(2019, 3, 1, 8, 0, 0)  # Start observing at 9 am Local (8 UTC) on 01 Mar 2019.
 obstimeUTC = starttimeUTC
 
+# This functionality needs more testing
 # User supplied field (will choose nearest survey pointing from file later):
 #start_pos = SkyCoord.from_name('Abell 262')
 start_pos = None
@@ -135,7 +134,7 @@ csv_filename = 'timing_output_file.csv'
 filename = 'timing_map.png'
 
 # User supplied number of days for which to calculate schedule
-obs_length = 0.5     # number of days to calculate observations for (can be a float)
+obs_length = 2.0     # number of days to calculate observations for (can be a float)
 dowait = 5           # number of minutes to wait before checking source availability
 
 # Load all-sky pointing file and select the pointings with the label for the appropriate survey:
@@ -145,7 +144,7 @@ try:
 except NameError:
     # labels: l=lofar; m=medium-deep; s=shallow; t=timing; g=Milky Way +/-5 in galactic latitude
     #         h=NCP that will be covered with hexagonal compound beam arrangement
-    fields = Table(ascii.read('all_pointings.v4.13dec18.txt', format='fixed_width'))
+    fields = Table(ascii.read('./ancillary_data/all_pointings.v4.13dec18.txt', format='fixed_width'))
     timing_fields = fields[(fields['label'] == 't')]
     weights = np.ones(len(timing_fields))  # Each timing field should be observed once.
     # weights[apertif_fields['label']=='m'] = 10     # How to modify other fields.
@@ -153,19 +152,20 @@ except NameError:
 else:
     print("Pointings already loaded. '> del timing_fields' if want to reset weights.")
 
+print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
 print("Number of Timing fields are: {}".format(len(timing_fields)))
 
-# Retrieve names of observations from ATDB (excludes calibrator scans)
-observations = atdbquery.atdbquery(obs_mode='SC4')
-timing_obs = [dict(observations[i])['name'] for i in range(len(observations))
-              if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
-              and (dict(observations[i])['name'][0:2] != 'CT')]
-# Adjust 'weights' field for objects that have been previously observed:
-for obs in timing_obs:
-    if obs in fields['name']:
-        i = np.where(timing_fields['name'] == obs)
-        timing_fields['weights'][i] -= 1
+# # Retrieve names of observations from ATDB (excludes calibrator scans)
+# observations = atdbquery.atdbquery(obs_mode='SC4')
+# timing_obs = [dict(observations[i])['name'] for i in range(len(observations))
+#               if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
+#               and (dict(observations[i])['name'][0:2] != 'CT')]
+# # Adjust 'weights' field for objects that have been previously observed:
+# for obs in timing_obs:
+#     if obs in fields['name']:
+#         i = np.where(timing_fields['name'] == obs)
+#         timing_fields['weights'][i] -= 1
 
 # Estimate the telescope starting position as on the meridian (approximately parked)
 telescope_position = SkyCoord(ra=Time(obstimeUTC).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
@@ -178,6 +178,7 @@ names = ['3C138', '3C147', 'CTD93']
 calibrators = [SkyCoord.from_name(name) for name in names]
 
 print("Starting observations! UTC: " + str(obstimeUTC))
+print("Calculating schedule for the following " + str(obs_length) + " days.")
 
 if start_pos:
     sep = start_pos.separation(SkyCoord(np.array(timing_fields['hmsdms'])))
@@ -189,6 +190,7 @@ else:
 total_wait = 0
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
+# (This could probably be done better because write_to_parset is in modules/function.py)
 header = ['source', 'ra', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam', 'switch_type']
 
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
@@ -224,12 +226,14 @@ with open(csv_filename, 'w') as csvfile:
 
 print("Ending observations! UTC: " + str(obstimeUTC))
 print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait, total_wait*60./(obstimeUTC-starttimeUTC).total_seconds()*100))
+print("The schedule has been written to " + csv_filename)
+print("A map of the observed fields has been written to " + filename)
+print("##################################################################\n")
 
 # Create and save a figure of all pointings selected for this survey, and which have been observed.
 plt.figure(figsize=[14, 10])
 m = Basemap(projection='moll', lon_0=90, resolution='l', celestial=True)
 m.drawparallels(np.arange(30, 90, 15), labels=[False, False, False, False], color='darkgray')
-m.drawmeridians(np.arange(0, 360, 15), labels=[True, True, False, True], color='darkgray', latmax=90)
 xpt_ncp, ypt_ncp = m(SkyCoord(np.array(timing_fields['hmsdms'])).ra.deg,
                      SkyCoord(np.array(timing_fields['hmsdms'])).dec.deg)
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=6, label='SNS', mfc='none', color='0.3')
