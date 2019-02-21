@@ -158,16 +158,16 @@ print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
 print("Number of Apertif fields are: {}".format(len(apertif_fields)))
 
-# # Retrieve names of observations from ATDB (excludes calibrator scans)
-# observations = atdbquery.atdbquery(obs_mode='imaging')
-# imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
-#                if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
-#                and (dict(observations[i])['name'][0:2] != 'CT')]
-# # Adjust 'weights' field for objects that have been previously observed:
-# for obs in imaging_obs:
-#     if obs in fields['name']:
-#         i=np.where(apertif_fields['name'] == obs)
-#         apertif_fields['weights'][i] -= 1
+# Retrieve names of observations from ATDB (excludes calibrator scans)
+observations = atdbquery.atdbquery(obs_mode='imaging')
+imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
+               if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
+               and (dict(observations[i])['name'][0:2] != 'CT')]
+# Adjust 'weights' field for objects that have been previously observed:
+for obs in imaging_obs:
+    if obs in fields['name']:
+        i=np.where(apertif_fields['name'] == obs)
+        apertif_fields['weights'][i] -= 1
 
 # Estimate the telescope starting position as on the meridian (approximately parked)
 telescope_position = SkyCoord(ra=Time(obstimeUTC).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
