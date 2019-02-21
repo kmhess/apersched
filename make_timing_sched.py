@@ -20,6 +20,7 @@ import random
 
 from atdbquery import atdbquery
 from modules.calc_slewtime import calc_slewtime  # Wants [ra,dec] start/end positions in radians; outputs seconds.
+from modules.calibrators import *
 from modules.functions import *
 from modules.telescope_params import westerbork
 
@@ -156,26 +157,22 @@ print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
 print("Number of Timing fields are: {}".format(len(timing_fields)))
 
-# Retrieve names of observations from ATDB (excludes calibrator scans)
-observations = atdbquery.atdbquery(obs_mode='SC4')
-timing_obs = [dict(observations[i])['name'] for i in range(len(observations))
-              if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
-              and (dict(observations[i])['name'][0:2] != 'CT')]
-# Adjust 'weights' field for objects that have been previously observed:
-for obs in timing_obs:
-    if obs in fields['name']:
-        i = np.where(timing_fields['name'] == obs)
-        timing_fields['weights'][i] -= 1
+# # Retrieve names of observations from ATDB (excludes calibrator scans)
+# observations = atdbquery.atdbquery(obs_mode='SC4')
+# timing_obs = [dict(observations[i])['name'] for i in range(len(observations))
+#               if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
+#               and (dict(observations[i])['name'][0:2] != 'CT')]
+# # Adjust 'weights' field for objects that have been previously observed:
+# for obs in timing_obs:
+#     if obs in fields['name']:
+#         i = np.where(timing_fields['name'] == obs)
+#         timing_fields['weights'][i] -= 1
 
 # Estimate the telescope starting position as on the meridian (approximately parked)
 telescope_position = SkyCoord(ra=Time(obstimeUTC).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
 
 # Create a record of the positions planned to be observed so we can plot later.
 observed_pointings = []
-
-# Standard calibrators:
-names = ['3C138', '3C147', 'CTD93']
-calibrators = [SkyCoord.from_name(name) for name in names]
 
 print("Starting observations! UTC: " + str(obstimeUTC))
 print("Calculating schedule for the following " + str(obs_length) + " days.")
