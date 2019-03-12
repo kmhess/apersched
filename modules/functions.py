@@ -11,6 +11,7 @@ from .calibrators import *
 
 _int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, intent, person, switch_type = \
      '30', 'A', '4800', '64', 'T', 'compound', '0', '320', '1250.000', '1450.000', '1350.000', 'compound', 'KH', '-'
+# if args.calib_all_beams: _int = 10
 
 ###################################################################
 # Required functions for observing and writing observations to csv file.
