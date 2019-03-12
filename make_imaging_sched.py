@@ -1,13 +1,13 @@
 # make_imaging_sched: Make a schedule for Apertif imaging
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
-
 __author__ = "Kelley M. Hess"
 __date__ = "$21-feb-2019 16:00:00$"
-__version__ = "0.3"
+__version__ = "0.4"
 
 import csv
 import datetime
 
+from argparse import ArgumentParser, RawTextHelpFormatter
 from astropy.coordinates import Longitude, SkyCoord
 from astropy.io import ascii
 from astropy.table import Table
@@ -117,10 +117,36 @@ def do_target_observation(i, obstimeUTC, telescope_position, csvfile, total_wait
 
 ###################################################################
 
-# User supplied **UTC** start time:
-starttimeUTC = datetime.datetime.utcnow().replace(microsecond=0)  # Keep this as a datetime.time object!!
-starttimeUTC = datetime.datetime(2019, 3, 1, 16, 0, 0)  # Start observing at 5 pm Local (4 UTC) on 01 Mar 2019.
-obstimeUTC = starttimeUTC
+parser = ArgumentParser(description="Make observing schedule for the Apertif imaging surveys. Saves schedule in CSV file to be parsed by atdbspec. "
+                                    "Outputs a png of the completed and scheduled pointings.",
+                        formatter_class=RawTextHelpFormatter)
+
+parser.add_argument('-f', '--filename',
+                    default = './ancillary_data/all_pointings.v4.13dec18.txt',
+                    help = 'Specify the input file of pointings to choose from (default: %(default)s).')
+parser.add_argument('-o', '--output',
+                    default = 'temp',
+                    help = 'Specify the root of output csv and png files (default: imaging_sched_%(default)s).csv.')
+parser.add_argument('-s', "--starttime_utc",
+                    default = "2019-03-18 08:00:00",
+                    help = "The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
+                    type = datetime.datetime.fromisoformat)
+parser.add_argument('-l', "--schedule_length",
+                    default = 7.0,
+                    help = "Number of days to schedule (can be float; default: %(default)s).",
+                    type=float)
+# parser.add_argument('-p', '--startposition',
+#                     default = 'input/atdbpointing_example.csv',
+#                     help = 'Specify the input file location (default: %(default)s)')
+parser.add_argument('-b', "--all_beam_calib",
+                    help = "Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
+                    action = 'store_true')
+parser.add_argument('-a', "--check_atdb",
+                    help = "If option is included, *DO NOT* check ATDB for previous observations.",
+                    action = 'store_false')
+
+# Parse the arguments above
+args = parser.parse_args()
 
 # This functionality needs more testing
 # User supplied field (will choose nearest survey pointing from file later):
@@ -128,55 +154,53 @@ obstimeUTC = starttimeUTC
 start_pos = None
 
 # Filename for the csv file of observed fields:
-csv_filename = 'imaging_output_file.csv'
+csv_filename = 'imaging_sched_temp.csv'
 
 # Filename for the map of observed fields:
-filename = 'imaging_map.png'
+filename = 'imaging_map_temp.png'
 
-# User supplied number of days for which to calculate schedule
-obs_length = 3.0     # number of days to calculate observations for (can be a float)
-dowait = 5           # number of minutes to wait before checking source availability
+# Number of minutes to wait before checking source availability
+dowait = 5
 
 # Load all-sky pointing file and select the pointings with the label for the appropriate survey:
-# Replace filename with the latest if necessary.
-try:
-    apertif_fields
-except NameError:
-    # labels: l=lofar; m=medium-deep; s=shallow; t=timing; g=Milky Way +/-5 in galactic latitude
-    #         h=NCP that will be covered with hexagonal compound beam arrangement
-    fields = Table(ascii.read('./ancillary_data/all_pointings.v4.13dec18.txt', format='fixed_width'))
-    apertif_fields = fields[(fields['label'] == 'l') | (fields['label'] == 'm') | (fields['label'] == 's')]
-    weights = np.zeros(len(apertif_fields))
-    weights[apertif_fields['label'] == 's'] = 1
-    weights[apertif_fields['label'] == 'm'] = 10
-    weights[apertif_fields['label'] == 'l'] = 4
-    apertif_fields['weights'] = weights  # Add "weights" column to table.
-else:
-    print("Pointings already loaded. '> del apertif_fields' if want to reset weights.")
+
+# labels: l=lofar; m=medium-deep; s=shallow; t=timing; g=Milky Way +/-5 in galactic latitude
+#         h=NCP that will be covered with hexagonal compound beam arrangement
+fields = Table(ascii.read(args.filename, format='fixed_width'))
+apertif_fields = fields[(fields['label'] == 'l') | (fields['label'] == 'm') | (fields['label'] == 's')]
+# apertif_fields = fields[(fields['label'] == 'm')]
+weights = np.zeros(len(apertif_fields))
+weights[apertif_fields['label'] == 's'] = 1
+weights[apertif_fields['label'] == 'm'] = 10
+weights[apertif_fields['label'] == 'l'] = 4
+apertif_fields['weights'] = weights  # Add "weights" column to table.
 
 print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
-print("Number of Apertif fields are: {}".format(len(apertif_fields)))
+print("Number of Apertif imaging fields are: {}".format(len(apertif_fields)))
 
 # Retrieve names of observations from ATDB (excludes calibrator scans)
-observations = atdbquery.atdbquery(obs_mode='imaging')
-imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
-               if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
-               and (dict(observations[i])['name'][0:2] != 'CT')]
-# Adjust 'weights' field for objects that have been previously observed:
-for obs in imaging_obs:
-    if obs in fields['name']:
-        i=np.where(apertif_fields['name'] == obs)
-        apertif_fields['weights'][i] -= 1
+if args.check_atdb:
+    observations = atdbquery.atdbquery(obs_mode='imaging')
+    imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
+                   if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
+                   and (dict(observations[i])['name'][0:2] != 'CT')]
+    # Adjust 'weights' field for objects that have been previously observed:
+    for obs in imaging_obs:
+        if obs in fields['name']:
+            i=np.where(apertif_fields['name'] == obs)
+            apertif_fields['weights'][i] -= 1
+else:
+    print("Not querying ATDB for previous observations.")
 
 # Estimate the telescope starting position as on the meridian (approximately parked)
-telescope_position = SkyCoord(ra=Time(obstimeUTC).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
+telescope_position = SkyCoord(ra=Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
 
 # Create a record of the positions planned to be observed so we can plot later.
 observed_pointings = []
 
-print("Starting observations! UTC: " + str(obstimeUTC))
-print("Calculating schedule for the following " + str(obs_length) + " days.")
+print("Starting observations! UTC: " + str(args.starttime_utc))
+print("Calculating schedule for the following " + str(args.schedule_length) + " days.")
 
 if start_pos:
     sep = start_pos.separation(SkyCoord(np.array(apertif_fields['hmsdms'])))
@@ -199,13 +223,13 @@ with open(csv_filename, 'w') as csvfile:
 
     # Always start on a calibrator
     i = 1
-    i, new_obstimeUTC, new_position, total_wait = do_calibration(i, starttimeUTC, telescope_position, writer, total_wait)
+    i, new_obstimeUTC, new_position, total_wait = do_calibration(i, args.starttime_utc, telescope_position, writer, total_wait)
     obstimeUTC = new_obstimeUTC
     telescope_position = new_position
     print("UTC: " + str(obstimeUTC) + ",  LST: " + str(Time(obstimeUTC).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
 
     # Iterate between target and calibrators for the specified amount of time & write to CSV file:
-    while obstimeUTC < starttimeUTC + datetime.timedelta(days=obs_length):
+    while obstimeUTC < args.starttime_utc + datetime.timedelta(days=args.schedule_length):
         i += 1
         i, new_obstimeUTC, new_position, total_wait = do_target_observation(i, obstimeUTC, telescope_position, writer, total_wait, closest_field)
         closest_field = None
@@ -221,8 +245,8 @@ with open(csv_filename, 'w') as csvfile:
         closest_field = None
 
 print("Ending observations! UTC: " + str(obstimeUTC))
-print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait, total_wait*60./(obstimeUTC-starttimeUTC).total_seconds()*100))
-print("The schedule has been written to " + csv_filename)
+print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait, total_wait * 60. / (obstimeUTC - starttime_utc).total_seconds() * 100))
+print("\n The schedule has been written to " + csv_filename)
 print("A map of the observed fields has been written to " + filename)
 print("##################################################################\n")
 
@@ -236,7 +260,7 @@ m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='SNS', mfc='none', color='0.1'
 for i, f in enumerate(apertif_fields):
     if (f['label'] == 'm') & (f['weights'] != 10):
         m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0.8', alpha=f['weights'] / 10)
-        print(f, 'red')
+        # print(f, 'red')
     elif (f['label'] == 's') & (f['weights'] == 0):
         m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0.8', alpha=f['weights'] / 10)
     elif (f['label'] == 'l') & (f['weights'] != 4):
@@ -245,8 +269,10 @@ m.plot(0, 0, 'o', markersize=7, label='Already in ATDB', mfc='red', color='0.8')
 for o in observed_pointings:
     xpt_ncp, ypt_ncp = m(o.ra.deg, o.dec.deg)
     m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, mfc='blue')
-    print(o, 'blue')
+    # print(o, 'blue')
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='To be observed', mfc='blue', color='0.8')
+# xcal_ncp, ycal_ncp = m(SkyCoord(np.array(calibrators.ra.deg, SkyCoord(np.array(calibrators.dec.deg)
+# for i, f in enumerate(names):
+#     m.plot(xcal_ncp[i], ycal_ncp[i], 'o', markersize=7, mfc='purple', color='0.8', alpha=f['weights'] / 10)
 plt.legend(loc=1)
-
 plt.savefig(filename)
