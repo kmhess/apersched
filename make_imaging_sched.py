@@ -49,7 +49,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
 
     new_obstime_utc = obstime_utc
     # Wait for calibrator to be at least an hour above the horizon.
-    while (not is_cal_up): # and (calib_wait < 6. * 60.): # and (not is3c286):
+    while not is_cal_up:  # and (calib_wait < 6. * 60.): # and (not is3c286):
         calib_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -65,7 +65,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         new_obstime_utc = obstime_utc
         is_3c286_up = (current_lst.hour - calibrators[n].ra.hour > -5.0) and (
                     current_lst.hour - calibrators[n].ra.hour < 2.0)
-        while (not is_3c286_up):
+        while not is_3c286_up:
             calib_wait += dowait
             new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
             new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -76,24 +76,26 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
             current_lst = new_lst
             print("Calibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
 
-    #     is3c138 = False
-    #     # is3c286 = False
-    #     print("No calibrator for {} hours. Go to a target instead.".format(calib_wait/60.))
-
     slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
                                  [calibrators[n].ra.radian, calibrators[n].dec.radian])
-    if (slew_seconds < calib_wait * 60.): new_obstime_utc = obstime_utc
-    else: new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
+    if slew_seconds < calib_wait * 60.:
+        new_obstime_utc = obstime_utc + datetime.timedelta(minutes=calib_wait)
+    else:
+        new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
     after_cal = observe_calibrator(new_obstime_utc, obstime=2. * 60. + 58.)
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
     type_cal = 'Polarization'
-    if (n == 1): type_cal = 'Flux'
+    if n == 1:
+        type_cal = 'Flux'
     print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
 
-    if (n == 3): next_cal = names[n]
-    elif (next_cal == names[0]): next_cal = names[1]
-    else: next_cal = names[0]
+    if n == 3:
+        next_cal = names[n]
+    elif next_cal == names[0]:
+        next_cal = names[1]
+    else:
+        next_cal = names[0]
 
     return i, after_cal, calibrators[n], total_wait, next_cal
 
@@ -158,35 +160,44 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
     availability[availability < -12] += 24
 
     targ_wait = 0
+
+    new_obstime_utc = obstime_utc
     while not np.any((availability < 0.0) & (availability > -0.5)):
         targ_wait += dowait
-        total_wait += dowait
-        new_obstime_utc = wait_for_rise(obstime_utc, waittime=dowait)
-        obstime_utc = new_obstime_utc
-        current_lst = Time(obstime_utc).sidereal_time('apparent', westerbork().lon)
+        new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
+        current_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
         proposed_ra = (current_lst + Longitude('6h')).wrap_at(360 * u.deg)
         # if closest_field:
         #     availability = SkyCoord(apertif_fields['hmsdms'][closest_field]).ra.hour - proposed_ra.hour
         # else:
         availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
         availability[availability < -12] += 24
-    if targ_wait != 0:
+    if (targ_wait != 0) and (targ_wait < 6. * 60):
+        total_wait += targ_wait
         print("Target not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
     # if closest_field:
     #     first_field = apertif_fields[closest_field][0]
     # else:
-    first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][0]
 
-    # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
-    # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
-    slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
-                                 [SkyCoord(first_field['hmsdms']).ra.radian,
-                                  SkyCoord(first_field['hmsdms']).dec.radian])
-    new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds) + datetime.timedelta(seconds=targ_wait)
-    after_target = observe_target(apertif_fields, new_obstime_utc, first_field['name'], obstime=11.5)
-    write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstime_utc, after_target)
-    print("Scan {} observed {}.".format(i, first_field['hmsdms']))
-    return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
+    if targ_wait <= 6. * 60:
+        first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][0]
+
+        # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
+        # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
+        slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
+                                     [SkyCoord(first_field['hmsdms']).ra.radian,
+                                      SkyCoord(first_field['hmsdms']).dec.radian])
+        if slew_seconds < targ_wait * 60.:
+            new_obstime_utc = obstime_utc + datetime.timedelta(minutes=targ_wait)
+        else:
+            new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
+        after_target = observe_target(apertif_fields, new_obstime_utc, first_field['name'], obstime=11.5)
+        write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstime_utc, after_target)
+        print("Scan {} observed {}.".format(i, first_field['hmsdms']))
+        return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
+    else:
+        print("No target for {} hours. Go to a calibrator instead.".format(targ_wait/60.))
+        return i, obstime_utc, telescope_position, total_wait
 
 ###################################################################
 
@@ -198,7 +209,7 @@ parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
 parser.add_argument('-o', '--output', default='temp',
                     help='Specify the root of output csv and png files (default: imaging_sched_%(default)s).csv.')
-parser.add_argument('-s', "--starttime_utc", default="2019-03-18 08:00:00",
+parser.add_argument('-s', "--starttime_utc", default="2019-03-25 20:00:00",
                     help="The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
                     type=datetime.datetime.fromisoformat)
 parser.add_argument('-l', "--schedule_length", default=7.0,
@@ -222,7 +233,7 @@ args = parser.parse_args()
 
 # This functionality needs more testing
 # User supplied field (will choose nearest survey pointing from file later):
-#start_pos = SkyCoord.from_name('Abell 262')
+# start_pos = SkyCoord.from_name('Abell 262')
 start_pos = None
 
 # Filename for the csv file of observed fields:
@@ -248,6 +259,13 @@ weights[apertif_fields['label'] == 'm'] = 10
 weights[apertif_fields['label'] == 'l'] = 4
 apertif_fields['weights'] = weights  # Add "weights" column to table.
 
+# Get rid of very beginning of Fall sky (unstable to current algorithm)
+apertif_fields=apertif_fields[(apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 21.75*15.)]
+
+# Get rid of all but HETDEX in Spring sky (for 4 week operations rehearsal)
+apertif_fields=apertif_fields[(apertif_fields['ra'] < 6*15.) | (apertif_fields['ra'] > 20.*15.) |
+                              ((apertif_fields['ra'] > 6.*15.) & (apertif_fields['ra'] < 20.*15.) & (apertif_fields['dec'] > 50.))]
+
 print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
 print("Number of Apertif imaging fields are: {}".format(len(apertif_fields)))
@@ -261,7 +279,7 @@ if args.check_atdb:
     # Adjust 'weights' field for objects that have been previously observed:
     for obs in imaging_obs:
         if obs in fields['name']:
-            i=np.where(apertif_fields['name'] == obs)
+            i = np.where(apertif_fields['name'] == obs)
             apertif_fields['weights'][i] -= 1
 else:
     print("Not querying ATDB for previous observations.")
@@ -306,54 +324,77 @@ with open(csv_filename, 'w') as csvfile:
             do_calibration(i, args.starttime_utc, telescope_position, writer, total_wait)
     obstime_utc = new_obstime_utc
     telescope_position = new_position
-    print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
+    if args.verbose:
+        print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
+            Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
 
     # Iterate between target and calibrators for the specified amount of time & write to CSV file:
     while obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length):
         i += 1
-        i, new_obstime_utc, new_position, total_wait = do_target_observation(i, obstime_utc, telescope_position, writer, total_wait) #, closest_field)
-        # closest_field = None
+        i, new_obstime_utc, new_position, total_wait = do_target_observation(i, obstime_utc, telescope_position, writer,
+                                                                             total_wait)
+        if args.verbose:
+            print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
+                Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
+            print("\tTotal time between end of scans: {:0.4} hours".format(
+                (new_obstime_utc - obstime_utc).seconds / 3600.))
         obstime_utc = new_obstime_utc
         telescope_position = new_position
         observed_pointings.append(new_position)
-        if args.verbose: print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
-            Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
+
+        # If doing a 40 beam calibration and the cycle is stuck in a rut, observe 3C286 and then go back to the beginning of loop
         if args.all_beam_calib and (next_cal == names[3]):
             i += 1
             next_cal = names[1]
-            i, new_obstime_utc, new_position, total_wait, next_cal = do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal)
+            print("NEXT CALIBRATOR IS {}".format(next_cal))
+            i, new_obstime_utc, new_position, total_wait, next_cal = do_calibration_40b(i, obstime_utc,
+                                                                                        telescope_position, writer,
+                                                                                        total_wait, next_cal)
+            if args.verbose:
+                print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
+                    Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
+                print("\tTotal time between end of scans: {:0.4} hours".format(
+                    (new_obstime_utc - obstime_utc).seconds / 3600.))
             obstime_utc = new_obstime_utc
             telescope_position = new_position
-            if args.verbose: print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
-                Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
             continue
+
+        # If doing a 40 beam calibration, do two targets in a row
         if args.all_beam_calib:
             i += 1
             i, new_obstime_utc, new_position, total_wait = do_target_observation(i, obstime_utc, telescope_position,
-                                                                                 writer, total_wait)  # , closest_field)
-            # closest_field = None
+                                                                                 writer, total_wait)
+            if args.verbose:
+                print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
+                    Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
+                print("\tTotal time between end of scans: {:0.4} hours".format(
+                    (new_obstime_utc - obstime_utc).seconds / 3600.))
             obstime_utc = new_obstime_utc
             telescope_position = new_position
             observed_pointings.append(new_position)
-            if args.verbose: print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
-                Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
+
+        # Always finish on a calibrator
         i += 1
         if args.all_beam_calib:
             i, new_obstime_utc, new_position, total_wait, next_cal = \
-            do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal)
+                do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal)
         else:
             i, new_obstime_utc, new_position, total_wait = \
-            do_calibration(i, obstime_utc, telescope_position, writer, total_wait)
+                do_calibration(i, obstime_utc, telescope_position, writer, total_wait)
+        if args.verbose:
+            print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
+                Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
+            print("\tTotal time between end of scans: {:0.4} hours".format(
+                (new_obstime_utc - obstime_utc).seconds / 3600.))
         obstime_utc = new_obstime_utc
         telescope_position = new_position
-        if args.verbose: print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
-            Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
-        # closest_field = None
 
 print("Ending observations! UTC: " + str(obstime_utc))
-print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait, total_wait * 60. / (obstime_utc - args.starttime_utc).total_seconds() * 100))
+print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait,
+                                                              total_wait * 60. / (obstime_utc - args.starttime_utc).total_seconds() * 100))
 print("\nThe schedule has been written to " + csv_filename)
 print("A map of the observed fields has been written to " + filename)
+print("IF THIS IS NOT A REAL SURVEY OBSERVATION BUT WILL BE OBSERVED, EDIT THE TARGET NAMES IN THE csv FILE!")
 print("##################################################################\n")
 
 # Create and save a figure of all pointings selected for this survey, and which have been observed.
@@ -361,7 +402,8 @@ plt.figure(figsize=[8, 8])
 m = Basemap(projection='nplaea', boundinglat=20, lon_0=310, resolution='l', celestial=True)
 m.drawparallels(np.arange(30, 90, 15), labels=[False, False, False, False], color='darkgray')
 m.drawmeridians(np.arange(0, 360, 15), labels=[True, True, False, True], color='darkgray', latmax=90)
-xpt_ncp, ypt_ncp = m(SkyCoord(np.array(apertif_fields['hmsdms'])).ra.deg, SkyCoord(np.array(apertif_fields['hmsdms'])).dec.deg)
+xpt_ncp, ypt_ncp = m(SkyCoord(np.array(apertif_fields['hmsdms'])).ra.deg,
+                     SkyCoord(np.array(apertif_fields['hmsdms'])).dec.deg)
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='SNS', mfc='none', color='0.1')
 for i, f in enumerate(apertif_fields):
     if (f['label'] == 'm') & (f['weights'] != 10):
