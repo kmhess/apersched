@@ -26,7 +26,7 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime):
     date1, time1 = start_datetime.strftime('%Y-%m-%d'), start_datetime.strftime('%H:%M:%S')
     date2, time2 = end_datetime.strftime('%Y-%m-%d'), end_datetime.strftime('%H:%M:%S')
     if source_name in names:
-        all_cols=[source, ra, dec, date1, time1, date2, time2, _int, 'S*', weight, beam, 'system']
+        all_cols=[source, ra, dec, date1, time1, date2, time2, '10', 'S*', weight, beam, 'system']
     else:
         all_cols = [source, ra, dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type]
     writer.writerow(all_cols)
