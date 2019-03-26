@@ -206,7 +206,7 @@ parser = ArgumentParser(description="Make observing schedule for the Apertif ima
 parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v4.13dec18.txt',
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
 parser.add_argument('-o', '--output', default='temp',
-                    help='Specify the root of output csv and png files (default: imaging_sched_%(default)s).csv.')
+                    help='Specify the root of output csv and png files (default: imaging_sched_%(default)s.csv.)')
 parser.add_argument('-s', "--starttime_utc", default="2019-03-25 20:00:00",
                     help="The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
                     type=datetime.datetime.fromisoformat)
