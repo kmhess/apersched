@@ -31,48 +31,50 @@ from modules.telescope_params import westerbork
 # Need to add a check to do_calib at the beginning of an observation (I think)
 def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
     current_lst = Time(obstime_utc).sidereal_time('apparent', westerbork().lon)
-    is3c147 = np.abs(current_lst.hour - calibrators[0].ra.hour < 5.0)
-    is_ctd93 = np.abs(current_lst.hour - calibrators[2].ra.hour < 5.0)
+    isB1933 = np.abs(current_lst.hour - psr_cal[0].ra.hour) < 5.0
+    isB0531 = np.abs(current_lst.hour - psr_cal[1].ra.hour) < 5.0
+    isB0329 = np.abs(current_lst.hour - psr_cal[2].ra.hour) < 5.0
+    isB0950 = np.abs(current_lst.hour - psr_cal[3].ra.hour) < 5.0
 
-    calib_wait = 0
+    calib_wait = 180  # to make sure ATDB has enough time to start a new observation
     # Wait for calibrator to be at least an hour above the horizon.
-    while (not is3c147) and (not is_ctd93):
+    while (not isB1933) and (not isB0531) and (not isB0329) and (not isB0950):
         calib_wait += dowait
         total_wait += dowait
         new_obstime_utc = wait_for_rise(obstime_utc, waittime=dowait)
         obstime_utc = new_obstime_utc
         current_lst = Time(obstime_utc).sidereal_time('apparent', westerbork().lon)
-        is3c147 = np.abs(current_lst.hour - calibrators[0].ra.hour < 5.0)
-        is_ctd93 = np.abs(current_lst.hour - calibrators[1].ra.hour < 5.0)
-    if calib_wait != 0:
+        isB1933 = np.abs(current_lst.hour - psr_cal[0].ra.hour) < 5.0
+        isB0531 = np.abs(current_lst.hour - psr_cal[1].ra.hour) < 5.0
+        isB0329 = np.abs(current_lst.hour - psr_cal[2].ra.hour) < 5.0
+        isB0950 = np.abs(current_lst.hour - psr_cal[3].ra.hour) < 5.0
+    if calib_wait != 180:
         print("Calibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
 
     # Observe the calibrator(s) that is (are) up:
-    if is3c147:
-        slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
-                                     [calibrators[0].ra.radian, calibrators[0].dec.radian])
-        new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
-        after_3c147 = observe_calibrator(new_obstime_utc, obstime=20)
-        write_to_csv(csvfile, names[0], calibrators[0], new_obstime_utc, after_3c147)
-        print("Scan {} observed {}.".format(i, names[0]))
-
-        i += 1
-        slew_seconds = calc_slewtime([calibrators[0].ra.radian, calibrators[0].dec.radian],
-                                     [calibrators[1].ra.radian, calibrators[1].dec.radian])
-        new_obstime_utc = after_3c147 + datetime.timedelta(seconds=slew_seconds)
-        after_3c138 = observe_calibrator(new_obstime_utc, obstime=20)
-        write_to_csv(csvfile, names[1], calibrators[1], new_obstime_utc, after_3c138)
-        print("Scan {} observed {}.".format(i, names[1]))
-        return i, after_3c138, calibrators[1], total_wait
-
+    if isB1933:
+        name = psr_names[0]
+        psr = psr_cal[0]
+    elif isB0531:
+        name = psr_names[1]
+        psr = psr_cal[1]
+    elif isB0329:
+        name = psr_names[2]
+        psr = psr_cal[2]
+    elif isB0950:
+        name = psr_names[3]
+        psr = psr_cal[3]
     else:
-        slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
-                                     [calibrators[2].ra.radian, calibrators[2].dec.radian])
-        new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
-        after_ctd93 = observe_calibrator(new_obstime_utc, obstime=20)
-        write_to_csv(csvfile, names[2], calibrators[2], new_obstime_utc, after_ctd93)
-        print("Scan {} observed {}.".format(i, names[2]))
-        return i, after_ctd93, calibrators[2], total_wait
+        print("Error: No known test pulsar visible. This should not be possible")
+        exit()
+
+    slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
+                                 [psr.ra.radian, psr.dec.radian])
+    new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
+    after_psr = observe_calibrator(new_obstime_utc, obstime=5)
+    write_to_csv(csvfile, name, psr, new_obstime_utc, after_psr)
+    print("Scan {} observed {}.".format(i, name))
+    return i, after_psr, psr, total_wait
 
 def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wait, closest_field):
     # Get first position or objects that are close to current observing horizon:
@@ -86,7 +88,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
     availability[availability < -12] += 24
 
-    targ_wait = 0
+    targ_wait = 180 # to make sure ATDB has enough time to start a new observation
     while not np.any((availability < 0.5) & (availability > -0.5)):
         targ_wait += dowait
         total_wait += dowait
@@ -99,7 +101,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         else:
             availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
         availability[availability < -12] += 24
-    if targ_wait != 0:
+    if targ_wait != 180:
         print("Target not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
     if closest_field:
         first_field = timing_fields[closest_field][0]
@@ -216,8 +218,8 @@ with open(csv_filename, 'w') as csvfile:
         telescope_position = new_position
         observed_pointings.append(new_position)
         print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
-        ask_calib = ((obstime_utc - args.starttime_utc).total_seconds() / 3600.) % 24   # Has it been a unit of ~24 hours since last calib?
-        if (ask_calib > 22.5) | (ask_calib < 1.5):
+        ask_calib = ((obstime_utc - args.starttime_utc).total_seconds() / 3600.) % 12   # Has it been a unit of ~12 hours since last calib?
+        if (ask_calib > 10.5) | (ask_calib < 1.5):
             i += 1
             i, new_obstime_utc, new_position, total_wait = do_calibration(i, obstime_utc, telescope_position, writer, total_wait)
             obstime_utc = new_obstime_utc
