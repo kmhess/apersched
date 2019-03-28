@@ -1,8 +1,8 @@
 # make_imaging_sched: Make a schedule for Apertif imaging
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
-__date__ = "$21-feb-2019 16:00:00$"
-__version__ = "0.4"
+__date__ = "$28-mar-2019 16:00:00$"
+__version__ = "0.6"
 
 import csv
 import datetime
@@ -84,8 +84,8 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
 
     obstime = 2. * 60. + 58.   # 2.5 minutes per beam
-    # if n == 1:
-    #     obstime = 4. * 60. + 38.  # 5 minutes per beam
+    if n == 1:
+        obstime = 4. * 60. + 38.  # 5 minutes per beam
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
@@ -157,7 +157,8 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
     availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
     availability[availability < -12] += 24
 
-    targ_wait = 0
+    targ_wait = 0     # minutes
+    wait_limit = 6.0  # hours
 
     new_obstime_utc = obstime_utc
     while not np.any((availability < 0.0) & (availability > -0.5)):
@@ -170,14 +171,14 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         # else:
         availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
         availability[availability < -12] += 24
-    if (targ_wait != 0) and (targ_wait < 6. * 60):
+    if (targ_wait != 0) and (targ_wait <= wait_limit * 60):
         total_wait += targ_wait
         print("Target not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
     # if closest_field:
     #     first_field = apertif_fields[closest_field][0]
     # else:
 
-    if targ_wait <= 6. * 60:
+    if targ_wait <= wait_limit * 60:
         first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][0]
 
         # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
@@ -255,14 +256,35 @@ weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
 weights[apertif_fields['label'] == 'l'] = 4
-apertif_fields['weights'] = weights  # Add "weights" column to table.
+# Add "weights" column to table.
+apertif_fields['weights'] = weights
 
 # Get rid of very beginning of Fall sky (unstable to current algorithm)
 apertif_fields=apertif_fields[(apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 21.75*15.)]
 
-# Get rid of all but HETDEX in Spring sky (for 4 week operations rehearsal)
-apertif_fields=apertif_fields[(apertif_fields['ra'] < 6*15.) | (apertif_fields['ra'] > 20.*15.) |
-                              ((apertif_fields['ra'] > 6.*15.) & (apertif_fields['ra'] < 20.*15.) & (apertif_fields['dec'] > 50.))]
+##################################################################
+#
+# IF YOU WANT TO EDIT THE FIELDS AVAILABLE TO THE SCHEDULER BEYOND THE INPUT FILE, DO THAT HERE:
+
+# # Get rid of all except HETDEX in Spring sky (for 4 week operations rehearsal)
+# apertif_fields=apertif_fields[(apertif_fields['ra'] < 6*15.) | (apertif_fields['ra'] > 20.*15.) |
+#                               ((apertif_fields['ra'] > 6.*15.) & (apertif_fields['ra'] < 20.*15.) & (apertif_fields['label'] == 'm'))]
+
+# # Get rid of all but PP in Fall sky (for 2nd week of 4 week operations rehearsal)
+# apertif_fields=apertif_fields[(apertif_fields['ra'] > 6*15.) & (apertif_fields['ra'] < 20.*15.) |
+#                               (apertif_fields['label'] == 'm')]
+# # Make all of Spring sky weights=1 (no repeats; for 2nd week of 4 week operations rehearsal)
+# apertif_fields[(apertif_fields['ra'] > 6*15.) & (apertif_fields['ra'] < 20.*15.)]['weights'] = 1
+
+# # Get rid of all but CVn in Spring sky (for 2nd week of 4 week operations rehearsal)
+# apertif_fields=apertif_fields[(apertif_fields['ra'] < 6*15.) | (apertif_fields['ra'] > 20.*15.) |
+#                               ((apertif_fields['label'] == 'm') & (apertif_fields['ra'] > 12*15.) & (apertif_fields['ra'] < 13*15.) &
+#                                (apertif_fields['dec'] > 32.) & (apertif_fields['dec'] < 50.))]
+# # Make all of Fall sky weights=1 (no repeats; for 2nd week of 4 week operations rehearsal)
+# apertif_fields[(apertif_fields['ra'] > 6*15.) & (apertif_fields['ra'] < 20.*15.)]['weights'] = 1
+
+#
+##################################################################
 
 print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
@@ -299,7 +321,7 @@ print("Calculating schedule for the following " + str(args.schedule_length) + " 
 # else:
 #     closest_field = None
 
-# Keep track of observing efficiency
+# Keep track of observing efficiency (idle time, really)
 total_wait = 0
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
@@ -326,7 +348,7 @@ with open(csv_filename, 'w') as csvfile:
         print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
             Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
 
-    # Iterate between target and calibrators for the specified amount of time & write to CSV file:
+    # Iterate between (2) target(s) and calibrators for the specified amount of time & write to CSV file:
     while obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length):
         i += 1
         i, new_obstime_utc, new_position, total_wait = do_target_observation(i, obstime_utc, telescope_position, writer,
@@ -338,18 +360,17 @@ with open(csv_filename, 'w') as csvfile:
                 (new_obstime_utc - obstime_utc).seconds / 3600.))
         obstime_utc = new_obstime_utc
         telescope_position = new_position
-        observed_pointings.append(new_position)
+        observed_pointings.append(telescope_position)
 
-        # If doing a 40 beam calibration and the cycle is stuck in a rut, observe 3C286 and then go back to the beginning of loop
+        # If doing a 40 beam calibration and the cycle is stuck in a rut, observe 3C196 or 3C286 and then go back to the beginning of loop or end.
         current_lst = Time(obstime_utc).sidereal_time('apparent', westerbork().lon)
         if args.all_beam_calib and (current_lst.hour <= 11.):
             i += 1
             # next_cal = 'flux'
             # print("NEXT CALIBRATOR IS {} cal".format(next_cal))
             print("GOING BACK TO A CALIBRATOR EARLY.")
-            i, new_obstime_utc, new_position, total_wait, next_cal = do_calibration_40b(i, obstime_utc,
-                                                                                        telescope_position, writer,
-                                                                                        total_wait, next_cal)
+            i, new_obstime_utc, new_position, total_wait, next_cal = \
+                do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal)
             if args.verbose:
                 print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
                     Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
@@ -357,7 +378,10 @@ with open(csv_filename, 'w') as csvfile:
                     (new_obstime_utc - obstime_utc).seconds / 3600.))
             obstime_utc = new_obstime_utc
             telescope_position = new_position
-            continue
+            if obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length):
+                continue
+            else:
+                break
 
         # If doing a 40 beam calibration, do two targets in a row
         if args.all_beam_calib:
@@ -371,7 +395,7 @@ with open(csv_filename, 'w') as csvfile:
                     (new_obstime_utc - obstime_utc).seconds / 3600.))
             obstime_utc = new_obstime_utc
             telescope_position = new_position
-            observed_pointings.append(new_position)
+            observed_pointings.append(telescope_position)
 
         # Always finish on a calibrator
         i += 1

@@ -17,6 +17,10 @@ python3 make_imaging_sched.py -a -b -o test_run
 
 If you have no way to connect to ATDB, always run with the -a option.
 
-For imaging, one may wish to change the input field list to only a list of the "first year" positions.  Current default is all possible imaging positions.
+For imaging, one may wish to change the input field list to only a list of the "first year" positions.  Default is all possible imaging positions, however, a portion of the code bounded by `##` indicates where the user can hardcode a selection.  Current version of the code includes some examples of specific field selections for week 2 of science verification, including focusing on (1) PP for MDS fields or (2) CVn for MDS fields.  These need to be uncommented out to be used.
 
-For timing, need to finalize the calibration strategy within the team and modify the script as necessary.
+For timing, need to finalize the calibration strategy by adding drift scans and maybe more pulsars (Leon Oostrum).  Also need to modify so the choice of the next field is within a narrower range of Dec than it does now (for slewing purposes).
+
+## Known 'features':
+
+For imaging, if the RA range of targets is so restricted that it takes more than 6 hours to wait for a target source to rise, then the output png plot includes the position of 3C147 and/or 3C138, however the schedule is still correct.  It's just a funky plotting thing which can be ignored.  This is rare and is only seen when the RA range in one part of the sky is less than a couple hours.
