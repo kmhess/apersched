@@ -2,7 +2,7 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
 __date__ = "$28-mar-2019 16:00:00$"
-__version__ = "0.6"
+__version__ = "0.7"
 
 import csv
 import datetime
@@ -83,9 +83,10 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     else:
         new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
 
-    obstime = 2. * 60. + 58.   # 2.5 minutes per beam
+    obstime = 2. * 60. + 58.   # 2.5 minutes per beam, 2 min wait
+    obstime = 3. * 60. + 57.   # 3 mins per beam, 3 mins to allow for slew bug
     if n == 1:
-        obstime = 4. * 60. + 38.  # 5 minutes per beam
+       obstime = 4. * 60. + 38.  # 5 minutes per beam, 2 min wait
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
@@ -260,7 +261,7 @@ weights[apertif_fields['label'] == 'l'] = 4
 apertif_fields['weights'] = weights
 
 # Get rid of very beginning of Fall sky (unstable to current algorithm)
-apertif_fields=apertif_fields[(apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 21.75*15.)]
+apertif_fields=apertif_fields[((apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 22.75*15.))] # & (apertif_fields['dec'] > 30.)]
 
 ##################################################################
 #
@@ -342,7 +343,8 @@ with open(csv_filename, 'w') as csvfile:
     else:
         i, new_obstime_utc, new_position, total_wait = \
             do_calibration(i, args.starttime_utc, telescope_position, writer, total_wait)
-    obstime_utc = new_obstime_utc
+    obstime_utc = new_obstime_utc + datetime.timedelta(minutes=3.0)
+    total_wait += 3
     telescope_position = new_position
     if args.verbose:
         print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(
@@ -358,7 +360,9 @@ with open(csv_filename, 'w') as csvfile:
                 Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
             print("\tTotal time between end of scans: {:0.4} hours".format(
                 (new_obstime_utc - obstime_utc).seconds / 3600.))
-        obstime_utc = new_obstime_utc
+        # obstime_utc = new_obstime_utc
+        obstime_utc = new_obstime_utc + datetime.timedelta(minutes=3.0)
+        total_wait += 3
         telescope_position = new_position
         observed_pointings.append(telescope_position)
 
@@ -376,7 +380,8 @@ with open(csv_filename, 'w') as csvfile:
                     Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
                 print("\tTotal time between end of scans: {:0.4} hours".format(
                     (new_obstime_utc - obstime_utc).seconds / 3600.))
-            obstime_utc = new_obstime_utc
+            obstime_utc = new_obstime_utc + datetime.timedelta(minutes=3.0)
+            total_wait += 3
             telescope_position = new_position
             if obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length):
                 continue
@@ -393,7 +398,9 @@ with open(csv_filename, 'w') as csvfile:
                     Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
                 print("\tTotal time between end of scans: {:0.4} hours".format(
                     (new_obstime_utc - obstime_utc).seconds / 3600.))
-            obstime_utc = new_obstime_utc
+            # obstime_utc = new_obstime_utc
+            obstime_utc = new_obstime_utc + datetime.timedelta(minutes=3.0)
+            total_wait += 3
             telescope_position = new_position
             observed_pointings.append(telescope_position)
 
@@ -410,7 +417,8 @@ with open(csv_filename, 'w') as csvfile:
                 Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
             print("\tTotal time between end of scans: {:0.4} hours".format(
                 (new_obstime_utc - obstime_utc).seconds / 3600.))
-        obstime_utc = new_obstime_utc
+        obstime_utc = new_obstime_utc  + datetime.timedelta(minutes=3.0)
+        total_wait += 3
         telescope_position = new_position
 
 print("Ending observations! UTC: " + str(obstime_utc))

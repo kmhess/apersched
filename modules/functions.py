@@ -9,8 +9,8 @@ import datetime
 
 from .calibrators import *
 
-_int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, intent, person, switch_type = \
-     '30', 'A', '4800', '64', 'T', 'compound', '0', '320', '1250.000', '1450.000', '1350.000', 'compound', 'KH', '-'
+_int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, intent, person, switch_type, freqmode = \
+     '30', 'A', '4800', '64', 'T', 'compound', '0', '320', '1250.000', '1450.000', '1350.000', 'compound', 'KH', '-', '300'
 # if args.calib_all_beams: _int = 10
 
 ###################################################################
@@ -26,9 +26,9 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime):
     date1, time1 = start_datetime.strftime('%Y-%m-%d'), start_datetime.strftime('%H:%M:%S')
     date2, time2 = end_datetime.strftime('%Y-%m-%d'), end_datetime.strftime('%H:%M:%S')
     if (source_name in flux_names) or (source_name in pol_names):
-        all_cols=[source, ra, dec, date1, time1, date2, time2, '10', 'S*', weight, beam, 'system']
+        all_cols=[source, ra, dec, date1, time1, date2, time2, '10', 'S*', weight, beam, 'system', freqmode]
     else:
-        all_cols = [source, ra, dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type]
+        all_cols = [source, ra, dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type, freqmode]
     writer.writerow(all_cols)
 
 
