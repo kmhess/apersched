@@ -26,29 +26,39 @@ from modules.telescope_params import westerbork
 ###################################################################
 # Survey specific functions for doing observations and calibration
 
-def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, next_cal):
+def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, next_cal, mins_per_beam):
     current_lst = Time(obstime_utc).sidereal_time('apparent', westerbork().lon)
+    # Consider HA limits for shadowing:
+    #     https://old.astron.nl/radio-observatory/astronomers/wsrt-guide-observations/3-telescope-parameters-and-array-configuration
+    # Note ha_limit[1:2] depend on length of calibration!
+    syswait = 2.0  # minutes
+    obstime = (mins_per_beam + syswait) * 40. - syswait  # minutes
     if next_cal == 'flux':
         calibrators = flux_cal
         names = flux_names
         type_cal = 'Flux'
+        ha_limit=[-5.0, 5.0 - obstime / 60., 0.4]  # Entry 2 is hardcoded for 5 min per beam
     if next_cal == 'pol':
         calibrators = pol_cal
-        names = pol_names
+        l = pol_names
+        names = l
         type_cal = 'Polarization'
-    is_cal_up = [(current_lst.hour - calibrators[n].ra.hour > -5.0) and (current_lst.hour - calibrators[n].ra.hour < 2.0)
-                 for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
+        ha_limit = [-3.3, 3.3 - obstime / 60., - 1.0]  # Entry 2 is hardcoded for 5 min per beam
+    is_cal_up = [(current_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
+                 (current_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
+                 # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
 
     calib_wait = 0
 
     new_obstime_utc = obstime_utc
-    # Wait for calibrator to be at least an hour above the horizon.
+    # Wait for calibrator to be at least an hour above the observing horizon, or not shadowed.
     while not np.any(is_cal_up):  # and (calib_wait < 6. * 60.): # and (not is3c286):
         calib_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-        is_cal_up = [(new_lst.hour - calibrators[n].ra.hour > -5.0) and (new_lst.hour - calibrators[n].ra.hour < 2.0)
-                     for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
+        is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
+                     (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
+                     # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
         diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
         # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
     n = np.where(is_cal_up)[0][0]
@@ -83,15 +93,16 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     else:
         new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
 
-    obstime = 2. * 60. + 58.   # 2.5 minutes per beam, 2 min wait
-    obstime = 3. * 60. + 57.   # 3 mins per beam, 3 mins to allow for slew bug
+    # Calculate appropriate observe time for the calibrator and observe it.
+    obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
     if n == 1:
-       obstime = 4. * 60. + 38.  # 5 minutes per beam, 2 min wait
+        obstime = (5.0 + syswait) * 40. - syswait  # 5 minutes per beam, 2 min wait
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
     print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
 
+    # Set up for next calibrator
     if next_cal == 'flux':
         next_cal = 'pol'
     else:
@@ -159,7 +170,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
     availability[availability < -12] += 24
 
     targ_wait = 0     # minutes
-    wait_limit = 6.0  # hours
+    wait_limit = 7.0  # hours
 
     new_obstime_utc = obstime_utc
     while not np.any((availability < 0.0) & (availability > -0.5)):
@@ -215,6 +226,9 @@ parser.add_argument('-s', "--starttime_utc", default="2019-03-25 20:00:00",
 parser.add_argument('-l', "--schedule_length", default=7.0,
                     help="Number of days to schedule (can be float; default: %(default)s).",
                     type=float)
+parser.add_argument('-m', "--mins_per_beam", default=2.5,
+                    help="Number of minutes for calibrator in 40b scan (default: %(default)s).",
+                    type=float)
 # parser.add_argument('-p', '--startposition',
 #                     default = 'input/atdbpointing_example.csv',
 #                     help = 'Specify the input file location (default: %(default)s)')
@@ -261,7 +275,7 @@ weights[apertif_fields['label'] == 'l'] = 4
 apertif_fields['weights'] = weights
 
 # Get rid of very beginning of Fall sky (unstable to current algorithm)
-apertif_fields=apertif_fields[((apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 22.75*15.))] # & (apertif_fields['dec'] > 30.)]
+apertif_fields=apertif_fields[((apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 21.9*15.))] # & (apertif_fields['dec'] > 30.)]
 
 ##################################################################
 #
@@ -309,6 +323,8 @@ else:
 telescope_position = SkyCoord(ra=Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
 current_lst = Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon)
 next_cal = 'flux'
+if (current_lst.hour - pol_cal[1].ra.hour > -5.0) and (current_lst.hour - pol_cal[1].ra.hour < 0.1):
+    next_cal = 'pol'
 
 # Create a record of the positions planned to be observed so we can plot later.
 observed_pointings = []
@@ -339,7 +355,7 @@ with open(csv_filename, 'w') as csvfile:
     i = 1
     if args.all_beam_calib:
         i, new_obstime_utc, new_position, total_wait, next_cal = \
-            do_calibration_40b(i, args.starttime_utc, telescope_position, writer, total_wait, next_cal)
+            do_calibration_40b(i, args.starttime_utc, telescope_position, writer, total_wait, next_cal, args.mins_per_beam)
     else:
         i, new_obstime_utc, new_position, total_wait = \
             do_calibration(i, args.starttime_utc, telescope_position, writer, total_wait)
@@ -374,7 +390,7 @@ with open(csv_filename, 'w') as csvfile:
             # print("NEXT CALIBRATOR IS {} cal".format(next_cal))
             print("GOING BACK TO A CALIBRATOR EARLY.")
             i, new_obstime_utc, new_position, total_wait, next_cal = \
-                do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal)
+                do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal, args.mins_per_beam)
             if args.verbose:
                 print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
                     Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
@@ -408,7 +424,7 @@ with open(csv_filename, 'w') as csvfile:
         i += 1
         if args.all_beam_calib:
             i, new_obstime_utc, new_position, total_wait, next_cal = \
-                do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal)
+                do_calibration_40b(i, obstime_utc, telescope_position, writer, total_wait, next_cal, args.mins_per_beam)
         else:
             i, new_obstime_utc, new_position, total_wait = \
                 do_calibration(i, obstime_utc, telescope_position, writer, total_wait)
