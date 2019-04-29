@@ -19,7 +19,11 @@ If you have no way to connect to ATDB, always run with the -a option.
 
 For imaging, one may wish to change the input field list to only a list of the "first year" positions.  Default is all possible imaging positions, however, a portion of the code bounded by `##` indicates where the user can hardcode a selection.  Current version of the code includes some examples of specific field selections for week 2 of science verification, including focusing on (1) PP for MDS fields or (2) CVn for MDS fields.  These need to be uncommented out to be used.
 
-For timing, need to finalize the calibration strategy by adding drift scans and maybe more pulsars (Leon Oostrum).  Also need to modify so the choice of the next field is within a narrower range of Dec than it does now (for slewing purposes).
+For timing, need to modify so the choice of the next field is within a narrower range of Dec than it does now (for slewing purposes).
+
+## Behavior:
+
+For imaging, the program selects the lowest Dec field available, however if the Sun is closer to a target field than a user specified amount, the program selects the highest Dec field available.  At least in the beginning of the survey period, in most cases, this will give at least 20 more degrees separation.  If the Sun is within the user specified distance of a calibrator, the program will print a WARNING, but it will still schedule the calibrator.
 
 ## Known 'features':
 

@@ -1,14 +1,14 @@
 # make_imaging_sched: Make a schedule for Apertif imaging
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
-__date__ = "$28-mar-2019 16:00:00$"
-__version__ = "0.7"
+__date__ = "$29-apr-2019 16:00:00$"
+__version__ = "0.8"
 
 import csv
 import datetime
 
 from argparse import ArgumentParser, RawTextHelpFormatter
-from astropy.coordinates import Longitude, SkyCoord
+from astropy.coordinates import Longitude, SkyCoord, solar_system_ephemeris, get_sun
 from astropy.io import ascii
 from astropy.table import Table
 from astropy.time import Time
@@ -40,8 +40,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         ha_limit=[-5.0, 5.0 - obstime / 60., 0.4]  # Entry 2 is hardcoded for 5 min per beam
     if next_cal == 'pol':
         calibrators = pol_cal
-        l = pol_names
-        names = l
+        names = pol_names
         type_cal = 'Polarization'
         ha_limit = [-3.3, 3.3 - obstime / 60., - 1.0]  # Entry 2 is hardcoded for 5 min per beam
     is_cal_up = [(current_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
@@ -96,11 +95,16 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     # Calculate appropriate observe time for the calibrator and observe it.
     obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
     if n == 1:
-        obstime = (5.0 + syswait) * 40. - syswait  # 5 minutes per beam, 2 min wait
+        obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
     print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
+    sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
+    # print("Sun position: {}".format(sun_position))
+    check_sun = sun_position.separation(calibrators[n])
+    if check_sun.value < args.sun_distance:
+        print("WARNING: {} is THIS close to Sun: {:5.2f}".format(names[n],check_sun))
 
     # Set up for next calibrator
     if next_cal == 'flux':
@@ -192,6 +196,13 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
 
     if targ_wait <= wait_limit * 60:
         first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][0]
+        sun_position = get_sun(Time(new_obstime_utc,scale='utc'))
+        # print("Sun position: {}".format(sun_position))
+        check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        if check_sun.value < args.sun_distance:
+            first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][-1]
+            check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+            print("Shifted pointings. New field is THIS close to Sun: {}".format(check_sun))
 
         # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
         # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
@@ -220,21 +231,24 @@ parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
 parser.add_argument('-o', '--output', default='temp',
                     help='Specify the root of output csv and png files (default: imaging_sched_%(default)s.csv.)')
+parser.add_argument('-b', "--all_beam_calib",
+                    help="Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
+                    action='store_true')
+parser.add_argument('-m', "--mins_per_beam", default=2.5,
+                    help="Number of minutes for calibrator in 40b scan (default: %(default)s).",
+                    type=float)
 parser.add_argument('-s', "--starttime_utc", default="2019-03-25 20:00:00",
                     help="The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
                     type=datetime.datetime.fromisoformat)
 parser.add_argument('-l', "--schedule_length", default=7.0,
                     help="Number of days to schedule (can be float; default: %(default)s).",
                     type=float)
-parser.add_argument('-m', "--mins_per_beam", default=2.5,
-                    help="Number of minutes for calibrator in 40b scan (default: %(default)s).",
+parser.add_argument('-d', "--sun_distance", default=30.0,
+                    help="Distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
 # parser.add_argument('-p', '--startposition',
 #                     default = 'input/atdbpointing_example.csv',
 #                     help = 'Specify the input file location (default: %(default)s)')
-parser.add_argument('-b', "--all_beam_calib",
-                    help="Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
-                    action='store_true')
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
                     action='store_false')
@@ -318,6 +332,8 @@ if args.check_atdb:
             apertif_fields['weights'][i] -= 1
 else:
     print("Not querying ATDB for previous observations.")
+
+print("Will shift pointings if Sun is within {} degrees.".format(args.sun_distance))
 
 # Estimate the telescope starting position as on the meridian (approximately parked)
 telescope_position = SkyCoord(ra=Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
