@@ -9,8 +9,8 @@ import datetime
 
 from .calibrators import *
 
-_int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, intent, person, switch_type = \
-     '30', 'A', '4800', '64', 'T', 'compound', '0', '320', '1250.000', '1450.000', '1350.000', 'compound', 'KH', '-'
+_int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, intent, person, switch_type, freqmode = \
+     '30', 'A', '4800', '64', 'T', 'compound', '0', '320', '1250.000', '1450.000', '1350.000', 'compound', 'KH', '-', '300'
 # if args.calib_all_beams: _int = 10
 
 ###################################################################
