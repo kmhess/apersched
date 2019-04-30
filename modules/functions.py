@@ -17,7 +17,7 @@ _int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, int
 # Required functions for observing and writing observations to csv file.
 
 
-def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime):
+def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime, pulsar=False):
     # scan='{}{:03d}'.format(start_datetime.strftime('%Y%m%d'),i)
     # source='{}_{}'.format(source_name.split('_')[0],start_datetime.strftime('%Y%m%d'))
     source = '{}'.format(source_name.split('_')[0])
@@ -25,10 +25,7 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime):
     dec = str(source_pos.to_string('hmsdms').split(' ')[1]).replace('d', ':').replace('m', ':').replace('s', '')
     date1, time1 = start_datetime.strftime('%Y-%m-%d'), start_datetime.strftime('%H:%M:%S')
     date2, time2 = end_datetime.strftime('%Y-%m-%d'), end_datetime.strftime('%H:%M:%S')
-    if (source_name in flux_names) or (source_name in pol_names):
-        all_cols=[source, ra, dec, date1, time1, date2, time2, '10', 'S*', weight, beam, 'system']
-    else:
-        all_cols = [source, ra, dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type]
+    all_cols=[source, ra, '', dec, date1, time1, date2, time2, '1400', 'square_39p1', '0', '39', str(pulsar), '0']
     writer.writerow(all_cols)
 
 

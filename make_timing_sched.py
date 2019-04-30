@@ -72,7 +72,7 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
                                  [psr.ra.radian, psr.dec.radian])
     new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
     after_psr = observe_calibrator(new_obstime_utc, obstime=5)
-    write_to_csv(csvfile, name, psr, new_obstime_utc, after_psr)
+    write_to_csv(csvfile, name, psr, new_obstime_utc, after_psr, pulsar=True)
     print("Scan {} observed {}.".format(i, name))
     return i, after_psr, psr, total_wait
 
@@ -115,7 +115,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
                                   SkyCoord(first_field['hmsdms']).dec.radian])
     new_obstimeUTC = obstime_utc + datetime.timedelta(seconds=slew_seconds) + datetime.timedelta(seconds=targ_wait)
     after_target = observe_target(timing_fields, new_obstimeUTC, first_field['name'], obstime=3)
-    write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstimeUTC, after_target)
+    write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstimeUTC, after_target, pulsar=False)
     print("Scan {} observed {}.".format(i, first_field['hmsdms']))
     return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
 
@@ -194,7 +194,7 @@ closest_field = None
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
 # (This could probably be done better because write_to_parset is in modules/function.py)
-header = ['source', 'ra', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam', 'switch_type']
+header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'freq', 'weight', 'sbeam', 'ebeam', 'pulsar', 'beam']
 
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
 # Also, writes out a record of what is observed, when, and if the telescope has to wait for objects to rise.
