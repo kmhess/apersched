@@ -9,7 +9,7 @@ import csv
 import datetime
 
 from argparse import ArgumentParser, RawTextHelpFormatter
-from astropy.coordinates import Longitude, SkyCoord
+from astropy.coordinates import Longitude, SkyCoord, get_sun, get_moon
 from astropy.io import ascii
 from astropy.table import Table
 from astropy.time import Time
@@ -68,6 +68,15 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
         print("Error: No known test pulsar visible. This should not be possible")
         exit()
 
+    sun_position = get_sun(Time(obstime_utc, scale='utc'))
+    moon_position = get_moon(Time(obstime_utc, scale='utc'))
+    check_sun = sun_position.separation(psr)
+    check_moon = moon_position.separation(psr)
+    if check_sun.value < args.sun_distance:    # Can hard code this to a different value than target.
+        print("WARNING: {} is THIS close to Sun: {:5.2f}".format(name, check_sun))
+    if check_moon.value < 0.5:
+        print("WARNING: {} is within 0.5 deg of the Moon!".format(name))
+
     slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
                                  [psr.ra.radian, psr.dec.radian])
     new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
@@ -75,6 +84,7 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
     write_to_csv(csvfile, name, psr, new_obstime_utc, after_psr, pulsar=True)
     print("Scan {} observed {}.".format(i, name))
     return i, after_psr, psr, total_wait
+
 
 def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wait, closest_field):
     # Get first position or objects that are close to current observing horizon:
@@ -103,10 +113,27 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         availability[availability < -12] += 24
     if targ_wait != 180:
         print("Target not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
+    sun_position = get_sun(Time(obstime_utc, scale='utc'))
+    moon_position = get_moon(Time(obstime_utc, scale='utc'))
+
     if closest_field:
         first_field = timing_fields[closest_field][0]
+        check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
+        if check_sun.value < args.sun_distance:
+            print("WARNING: {} is THIS close to Sun: {:5.2f}".format(name, check_sun))
+        if check_moon.value < 0.5:
+            print("WARNING: {} is within 0.5 deg of the Moon.".format(name))
+
     else:
         first_field = random.choice(avail_fields[(availability < 0.5) & (availability > -0.5)])
+        check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
+        while (check_sun.value < args.sun_distance) or (check_moon.value < 0.5):
+            print("Sun or Moon too close to first pick; choose another target field")
+            first_field = random.choice(avail_fields[(availability < 0.5) & (availability > -0.5)])
+            check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+            check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
 
     # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
     # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
@@ -141,6 +168,10 @@ parser.add_argument('-a', "--check_atdb",
 parser.add_argument('-p', "--check_pulsars",
                     help="If option is included, check for visible pulsars for each pointing",
                     action='store_true')
+parser.add_argument('-d', "--sun_distance", default=30.0,
+                    help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
+                    type=float)
+
 
 # Parse the arguments above
 args = parser.parse_args()
@@ -199,6 +230,7 @@ print("Calculating schedule for the following " + str(args.schedule_length) + " 
 
 # Keep track of observing efficiency
 total_wait = 0
+# Could expand code to include the option of picking the field to start with.
 closest_field = None
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
@@ -252,12 +284,24 @@ print("\nThe schedule has been written to " + csv_filename)
 print("A map of the observed fields has been written to " + filename)
 print("##################################################################\n")
 
+# Calculate ecliptic for plotting
+year_arr = Time(args.starttime_utc) + np.linspace(0,364,365) * u.day
+obs_arr = Time(args.starttime_utc) + np.linspace(0,args.schedule_length,np.ceil(args.schedule_length*24)) * u.day
+sun_year = get_sun(year_arr)
+sun_obs = get_sun(obs_arr)
+moon_obs = get_moon(obs_arr)
+
 # Create and save a figure of all pointings selected for this survey, and which have been observed.
 plt.figure(figsize=[14, 10])
 m = Basemap(projection='moll', lon_0=90, resolution='l', celestial=True)
 m.drawparallels(np.arange(30, 90, 15), labels=[False, False, False, False], color='darkgray')
 xpt_ncp, ypt_ncp = m(SkyCoord(np.array(timing_fields['hmsdms'])).ra.deg,
                      SkyCoord(np.array(timing_fields['hmsdms'])).dec.deg)
+xsun_moll,ysun_moll=m(sun_year.ra.deg,sun_year.dec.deg)
+m.plot(xsun_moll,ysun_moll,'o-',markersize=2,label='Ecliptic/Sun',color='orange')
+xsunobs_moll,ysunobs_moll=m(sun_obs.ra.deg,sun_obs.dec.deg)
+xmoonobs_moll,ymoonobs_moll=m(moon_obs.ra.deg,moon_obs.dec.deg)
+m.plot(xmoonobs_moll,ymoonobs_moll,'o',markersize=5,label='Moon during observations',color='gray')
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=6, label='SNS', mfc='none', color='0.3')
 for i, f in enumerate(timing_fields):
     if (f['label'] == 't') & (f['weights'] == 0):
@@ -267,6 +311,8 @@ for o in observed_pointings:
     xpt_ncp, ypt_ncp = m(o.ra.deg, o.dec.deg)
     m.plot(xpt_ncp, ypt_ncp, 'o', markersize=6, mfc='blue', color='0.3')
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='To be observed', mfc='blue', color='0.8')
+m.plot(xsunobs_moll,ysunobs_moll,'o',markersize=6,color='orange')
+
 plt.legend(loc=3)
 
 plt.savefig(filename)

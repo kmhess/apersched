@@ -1,14 +1,14 @@
 # make_imaging_sched: Make a schedule for Apertif imaging
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
-__date__ = "$29-apr-2019 16:00:00$"
-__version__ = "0.8"
+__date__ = "$02-may-2019 16:00:00$"
+__version__ = "0.9"
 
 import csv
 import datetime
 
 from argparse import ArgumentParser, RawTextHelpFormatter
-from astropy.coordinates import Longitude, SkyCoord, solar_system_ephemeris, get_sun
+from astropy.coordinates import Longitude, SkyCoord, get_sun, get_moon
 from astropy.io import ascii
 from astropy.table import Table
 from astropy.time import Time
@@ -142,6 +142,11 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
         write_to_csv(csvfile, flux_names[0], flux_cal[0], new_obstime_utc, after_3c147)
         print("Scan {} observed {}.".format(i, flux_names[0]))
 
+        sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
+        check_sun = sun_position.separation(flux_cal[0])
+        if check_sun.value < args.sun_distance:
+            print("WARNING: {} is THIS close to Sun: {:5.2f}".format(flux_names[0], check_sun))
+
         i += 1
         slew_seconds = calc_slewtime([flux_cal[0].ra.radian, flux_cal[0].dec.radian],
                                      [pol_cal[0].ra.radian, pol_cal[0].dec.radian])
@@ -149,6 +154,10 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
         after_3c138 = observe_calibrator(new_obstime_utc, obstime=15)
         write_to_csv(csvfile, pol_names[0], pol_cal[0], new_obstime_utc, after_3c138)
         print("Scan {} observed {}.".format(i, pol_names[0]))
+
+        check_sun = sun_position.separation(pol_cal[0])
+        if check_sun.value < args.sun_distance:
+            print("WARNING: {} is THIS close to Sun: {:5.2f}".format(pol_names[0], check_sun))
         return i, after_3c138, pol_cal[0], total_wait
 
     else:
@@ -158,6 +167,11 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
         after_ctd93 = observe_calibrator(new_obstime_utc, obstime=15)
         write_to_csv(csvfile, pol_names[2], pol_cal[2], new_obstime_utc, after_ctd93)
         print("Scan {} observed {}.".format(i, pol_names[2]))
+
+        sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
+        check_sun = sun_position.separation(pol_cal[2])
+        if check_sun.value < args.sun_distance:
+            print("WARNING: {} is THIS close to Sun: {:5.2f}".format(pol_names[2], check_sun))
         return i, after_ctd93, pol_cal[2], total_wait
 
 
@@ -197,8 +211,10 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
     if targ_wait <= wait_limit * 60:
         first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][0]
         sun_position = get_sun(Time(new_obstime_utc,scale='utc'))
+        moon_position = get_moon(Time(new_obstime_utc, scale='utc'))
         # print("Sun position: {}".format(sun_position))
         check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
         if check_sun.value < args.sun_distance:
             first_field = avail_fields[(availability < 0.0) & (availability > -0.5)][-1]
             check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
@@ -227,7 +243,7 @@ parser = ArgumentParser(description="Make observing schedule for the Apertif ima
                                     "Outputs a png of the completed and scheduled pointings.",
                         formatter_class=RawTextHelpFormatter)
 
-parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v4.13dec18.txt',
+parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v5.29apr19.txt',
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
 parser.add_argument('-o', '--output', default='temp',
                     help='Specify the root of output csv and png files (default: imaging_sched_%(default)s.csv.)')
@@ -244,7 +260,7 @@ parser.add_argument('-l', "--schedule_length", default=7.0,
                     help="Number of days to schedule (can be float; default: %(default)s).",
                     type=float)
 parser.add_argument('-d', "--sun_distance", default=30.0,
-                    help="Distance in decimal degrees to Sun (default: %(default)s).",
+                    help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
 # parser.add_argument('-p', '--startposition',
 #                     default = 'input/atdbpointing_example.csv',
@@ -359,7 +375,7 @@ total_wait = 0
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
 # (This could probably be done better because write_to_parset is in modules/function.py)
-header = ['source', 'ra', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam', 'switch_type']
+header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam', 'switch_type',]
 
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
 # Also, writes out a record of what is observed, when, and if the telescope has to wait for objects to rise.
@@ -461,11 +477,30 @@ print("A map of the observed fields has been written to " + filename)
 print("IF THIS IS NOT A REAL SURVEY OBSERVATION BUT WILL BE OBSERVED, EDIT THE TARGET NAMES IN THE csv FILE!")
 print("##################################################################\n")
 
+# Calculate ecliptic for plotting
+year_arr = Time(args.starttime_utc) + np.linspace(0,364,365) * u.day
+obs_arr = Time(args.starttime_utc) + np.linspace(0,args.schedule_length,np.ceil(args.schedule_length*24)) * u.day
+sun_year = get_sun(year_arr)
+sun_obs = get_sun(obs_arr)
+moon_obs = get_moon(obs_arr)
+
 # Create and save a figure of all pointings selected for this survey, and which have been observed.
 plt.figure(figsize=[8, 8])
 m = Basemap(projection='nplaea', boundinglat=20, lon_0=310, resolution='l', celestial=True)
 m.drawparallels(np.arange(30, 90, 15), labels=[False, False, False, False], color='darkgray')
 m.drawmeridians(np.arange(0, 360, 15), labels=[True, True, False, True], color='darkgray', latmax=90)
+for f in flux_cal:
+    xcal_ncp, ycal_ncp = m(f.ra.deg, f.dec.deg)
+    m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
+for p in pol_cal:
+    xcal_ncp, ycal_ncp = m(p.ra.deg, p.dec.deg)
+    m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
+xsun_moll, ysun_moll = m(sun_year.ra.deg, sun_year.dec.deg)
+m.plot(xsun_moll, ysun_moll, 'o-', markersize=2, label='Ecliptic', color='orange')
+xsunobs_moll, ysunobs_moll = m(sun_obs.ra.deg, sun_obs.dec.deg)
+xmoonobs_moll, ymoonobs_moll = m(moon_obs.ra.deg, moon_obs.dec.deg)
+m.plot(xsunobs_moll, ysunobs_moll, 'o', markersize=6, label='Sun', color='orange')
+m.plot(xmoonobs_moll, ymoonobs_moll, 'o', markersize=5, label='Moon', color='gray')
 xpt_ncp, ypt_ncp = m(SkyCoord(np.array(apertif_fields['hmsdms'])).ra.deg,
                      SkyCoord(np.array(apertif_fields['hmsdms'])).dec.deg)
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='SNS', mfc='none', color='0.1')
@@ -483,8 +518,5 @@ for o in observed_pointings:
     m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, mfc='blue')
     # print(o, 'blue')
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='To be observed', mfc='blue', color='0.8')
-# xcal_ncp, ycal_ncp = m(SkyCoord(np.array(calibrators.ra.deg, SkyCoord(np.array(calibrators.dec.deg)
-# for i, f in enumerate(names):
-#     m.plot(xcal_ncp[i], ycal_ncp[i], 'o', markersize=7, mfc='purple', color='0.8', alpha=f['weights'] / 10)
 plt.legend(loc=1)
 plt.savefig(filename)

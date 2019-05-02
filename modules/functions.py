@@ -9,9 +9,8 @@ import datetime
 
 from .calibrators import *
 
-_int, priority, lo, sub1, _type, weight, beam, sub2, freq1, freq2, freqcent, intent, person, switch_type, freqmode = \
-     '30', 'A', '4800', '64', 'T', 'compound', '0', '320', '1250.000', '1450.000', '1350.000', 'compound', 'KH', '-', '300'
-# if args.calib_all_beams: _int = 10
+_int, lo, sub1, _type, weight, beam, sub2, centfreq, intent, switch_type, freqmode = \
+     '30', '4800', '64', 'T', 'compound', '0', '320', '1400', 'compound', '-', '300'
 
 ###################################################################
 # Required functions for observing and writing observations to csv file.
@@ -25,7 +24,12 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime, 
     dec = str(source_pos.to_string('hmsdms').split(' ')[1]).replace('d', ':').replace('m', ':').replace('s', '')
     date1, time1 = start_datetime.strftime('%Y-%m-%d'), start_datetime.strftime('%H:%M:%S')
     date2, time2 = end_datetime.strftime('%Y-%m-%d'), end_datetime.strftime('%H:%M:%S')
-    all_cols=[source, ra, '', dec, date1, time1, date2, time2, '1400', 'square_39p1', '0', '39', str(pulsar), '0']
+    if (source_name in flux_names) or (source_name in pol_names):
+        all_cols = [source, ra, '', dec, date1, time1, date2, time2, '10', 'S*', weight, beam, 'system', freqmode, centfreq]
+    elif ('S' in source_name) or ('M' in source_name):
+        all_cols = [source, ra, '', dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type, freqmode, centfreq]
+    else:
+        all_cols=[source, ra, '', dec, date1, time1, date2, time2, '1400', 'square_39p1', '0', '39', str(pulsar), '0']
     writer.writerow(all_cols)
 
 
