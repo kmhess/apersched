@@ -72,7 +72,7 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
                                  [psr.ra.radian, psr.dec.radian])
     new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
     after_psr = observe_calibrator(new_obstime_utc, obstime=5)
-    write_to_csv(csvfile, name, psr, new_obstime_utc, after_psr)
+    write_to_csv(csvfile, name, psr, new_obstime_utc, after_psr, pulsar=True)
     print("Scan {} observed {}.".format(i, name))
     return i, after_psr, psr, total_wait
 
@@ -115,7 +115,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
                                   SkyCoord(first_field['hmsdms']).dec.radian])
     new_obstimeUTC = obstime_utc + datetime.timedelta(seconds=slew_seconds) + datetime.timedelta(seconds=targ_wait)
     after_target = observe_target(timing_fields, new_obstimeUTC, first_field['name'], obstime=3)
-    write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstimeUTC, after_target)
+    write_to_csv(csvfile, first_field['name'], SkyCoord(first_field['hmsdms']), new_obstimeUTC, after_target, pulsar=False)
     print("Scan {} observed {}.".format(i, first_field['hmsdms']))
     return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
 
@@ -138,9 +138,18 @@ parser.add_argument('-l', "--schedule_length", default=2.0,
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
                     action='store_false')
+parser.add_argument('-p', "--check_pulsars",
+                    help="If option is included, check for visible pulsars for each pointing",
+                    action='store_true')
 
 # Parse the arguments above
 args = parser.parse_args()
+
+# import psr_query if pulsar check is enabled
+# this also loads the ATNF pulsar catalogue
+if args.check_pulsars:
+    from modules.psr_query import PsrQuery
+    pq = PsrQuery()
 
 # Filename for the csv file of observed fields:
 csv_filename = 'timing_sched_{}.csv'.format(args.output)
@@ -194,7 +203,7 @@ closest_field = None
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
 # (This could probably be done better because write_to_parset is in modules/function.py)
-header = ['source', 'ra', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam', 'switch_type']
+header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'freq', 'weight', 'sbeam', 'ebeam', 'pulsar', 'beam']
 
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
 # Also, writes out a record of what is observed, when, and if the telescope has to wait for objects to rise.
@@ -207,7 +216,11 @@ with open(csv_filename, 'w') as csvfile:
     i, new_obstime_utc, new_position, total_wait = do_calibration(i, args.starttime_utc, telescope_position, writer, total_wait)
     obstime_utc = new_obstime_utc
     telescope_position = new_position
+
     print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
+    # pulsar check
+    if args.check_pulsars:
+        print(pq.get_pulsars(telescope_position))
 
     # Iterate between target and calibrators for the specified amount of time & write to CSV file:
     while obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length):
@@ -216,8 +229,11 @@ with open(csv_filename, 'w') as csvfile:
         closest_field = None
         obstime_utc = new_obstime_utc
         telescope_position = new_position
-        observed_pointings.append(new_position)
+        # pulsar check
         print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
+        if args.check_pulsars:
+            print(pq.get_pulsars(telescope_position))
+        observed_pointings.append(new_position)
         ask_calib = ((obstime_utc - args.starttime_utc).total_seconds() / 3600.) % 12   # Has it been a unit of ~12 hours since last calib?
         if (ask_calib > 10.5) | (ask_calib < 1.5):
             i += 1
@@ -225,6 +241,9 @@ with open(csv_filename, 'w') as csvfile:
             obstime_utc = new_obstime_utc
             telescope_position = new_position
             print("\tUTC: " + str(obstime_utc) + ",  LST: " + str(Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan(s).")
+            # pulsar check
+            if args.check_pulsars:
+                print(pq.get_pulsars(telescope_position))
         closest_field = None
 
 print("Ending observations! UTC: " + str(obstime_utc))
