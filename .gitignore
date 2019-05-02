@@ -11,6 +11,7 @@ atdbquery/
 *.csv
 *.png
 *.txt
+*.pdf
 
 # Files created to run code in bulk, multiple times
 *.sh

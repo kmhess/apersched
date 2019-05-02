@@ -23,7 +23,9 @@ For timing, need to modify so the choice of the next field is within a narrower 
 
 ## Behavior:
 
-For imaging, the program selects the lowest Dec field available, however if the Sun is closer to a target field than a user specified amount, the program selects the highest Dec field available.  At least in the beginning of the survey period, in most cases, this will give at least 20 more degrees separation.  If the Sun is within the user specified distance of a calibrator, the program will print a WARNING, but it will still schedule the calibrator.
+For imaging, the program selects the lowest Dec field available, however if the Sun is closer to a target field than a user specified amount, the program selects the highest Dec field available.  At least in the beginning of the survey period, in most cases, this will give at least 20 more degrees separation.  If the Sun is within the user specified distance of a calibrator, the program will print a WARNING, but it will still schedule the calibrator. (Need to fix this for 3C286 for imaging!)
+
+A Sun and Moon avoidance strategy has also been implemented for the timing surveys (moon is never above ~+23d).  The minimum Sun distance can be set by the user.  The Moon distance is 0.5 degrees.  (This should be increased & hardcoded to the FoV of the tied array beams).  At the moment, the program prints a warning if a pulsar calibrator is within the minimum Sun or Moon distance, but takes no other action.
 
 ## Known 'features':
 
