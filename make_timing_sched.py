@@ -152,7 +152,7 @@ parser = ArgumentParser(description="Make observing schedule for the Apertif tim
                                     "Outputs a png of the completed and scheduled pointings.",
                         formatter_class=RawTextHelpFormatter)
 
-parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v4.13dec18.txt',
+parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v5.29apr19.txt',
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
 parser.add_argument('-o', '--output', default='temp',
                     help='Specify the suffix of output csv and png files (default: timing_sched_%(default)s).csv.')
