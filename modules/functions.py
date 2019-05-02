@@ -2,8 +2,8 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 
 __author__ = "Kelley M. Hess"
-__date__ = "$19-feb-2019 16:00:00$"
-__version__ = "0.3"
+__date__ = "$02-may-2019 16:00:00$"
+__version__ = "0.4"
 
 import datetime
 
