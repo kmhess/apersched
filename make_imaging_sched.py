@@ -2,10 +2,11 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
 __date__ = "$06-may-2019 16:00:00$"
-__version__ = "0.9.1"
+__version__ = "0.10"
 
 import csv
 import datetime
+import os
 
 from argparse import ArgumentParser, RawTextHelpFormatter
 from astropy.coordinates import Longitude, SkyCoord, get_sun, get_moon
@@ -37,7 +38,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         calibrators = flux_cal
         names = flux_names
         type_cal = 'Flux'
-        ha_limit=[-5.0, 5.0 - obstime / 60., 0.4]  # Entry 2 is hardcoded for 5 min per beam
+        ha_limit = [-5.0, 5.0 - obstime / 60., 0.4]  # Entry 2 is hardcoded for 5 min per beam
     if next_cal == 'pol':
         calibrators = pol_cal
         names = pol_names
@@ -104,7 +105,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     # print("Sun position: {}".format(sun_position))
     check_sun = sun_position.separation(calibrators[n])
     if check_sun.value < args.sun_distance:
-        print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n],check_sun))
+        print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n], check_sun))
 
     # Set up for next calibrator
     if next_cal == 'flux':
@@ -245,15 +246,17 @@ parser = ArgumentParser(description="Make observing schedule for the Apertif ima
 
 parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v5.29apr19.txt',
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
+parser.add_argument('-p', '--previous_obs', default='',
+                    help='Specify a file of previously scheduled pointings. (No default.)')
 parser.add_argument('-o', '--output', default='temp',
-                    help='Specify the root of output csv and png files (default: imaging_sched_%(default)s.csv.)')
+                    help='Specify the root of output csv and png files. If file exists, append to it (default: imaging_sched_%(default)s.csv).')
 parser.add_argument('-b', "--all_beam_calib",
                     help="Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
                     action='store_true')
-parser.add_argument('-m', "--mins_per_beam", default=2.5,
+parser.add_argument('-m', "--mins_per_beam", default=3.0,
                     help="Number of minutes for calibrator in 40b scan (default: %(default)s).",
                     type=float)
-parser.add_argument('-s', "--starttime_utc", default="2019-03-25 20:00:00",
+parser.add_argument('-s', "--starttime_utc", default="2019-07-01 08:00:00",
                     help="The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
                     type=datetime.datetime.fromisoformat)
 parser.add_argument('-l', "--schedule_length", default=7.0,
@@ -343,11 +346,35 @@ if args.check_atdb:
                    and (dict(observations[i])['name'][0:2] != 'CT')]
     # Adjust 'weights' field for objects that have been previously observed:
     for obs in imaging_obs:
-        if obs in fields['name']:
+        if obs in apertif_fields['name']:
             i = np.where(apertif_fields['name'] == obs)
             apertif_fields['weights'][i] -= 1
 else:
     print("Not querying ATDB for previous observations.")
+
+# Mostly for testing purposes, read in a list of previously scheduled pointings, remove those as possible fields,
+# save info for plotting later.
+try:
+    scheduled = Table.read(args.previous_obs, format='csv')
+    mask = ['3C' not in entry for entry in scheduled['source']]
+    scheduled = scheduled[mask]
+    scheduled_coords = SkyCoord(ra=scheduled['ra'], dec=scheduled['dec'], unit=(u.hourangle, u.deg))
+    print("Reading table of previously scheduled pointings.")
+    for sch in scheduled:
+        if sch['source'] in apertif_fields['name']:
+            i = np.where(apertif_fields['name'] == sch['source'])
+            apertif_fields['weights'][i] -= 1
+except IOError:
+    print("Requested file of previously scheduled observations {} does not exist. Continuing.")
+    scheduled_coords = []
+
+# Append schedule to end of previously existing file.
+if os.path.isfile(filename):
+    print("Output file exists; appending schedule to previous file {}".format(args.output))
+    header = False
+else:
+    header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam',
+              'switch_type', 'freqmode', 'centfreq']
 
 print("Will shift pointings if Sun is within {} degrees.".format(args.sun_distance))
 
@@ -361,27 +388,20 @@ if (current_lst.hour - pol_cal[1].ra.hour > -5.0) and (current_lst.hour - pol_ca
 # Create a record of the positions planned to be observed so we can plot later.
 observed_pointings = []
 
-print("\nStarting observations! UTC: " + str(args.starttime_utc))
-print("Calculating schedule for the following " + str(args.schedule_length) + " days.\n")
-
-# if start_pos:
-#     sep = start_pos.separation(SkyCoord(np.array(apertif_fields['hmsdms'])))
-#     closest_field = np.where((sep == min(sep)) & (apertif_fields['weights'] != 0))[0]
-# else:
-#     closest_field = None
-
-# Keep track of observing efficiency (idle time, really)
+# Keep track of idle time.
 total_wait = 0
-
-# Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
-# (This could probably be done better because write_to_parset is in modules/function.py)
-header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam', 'switch_type',]
 
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
 # Also, writes out a record of what is observed, when, and if the telescope has to wait for objects to rise.
-with open(csv_filename, 'w') as csvfile:
+print("\nStarting observations! UTC: " + str(args.starttime_utc))
+print("Calculating schedule for the following " + str(args.schedule_length) + " days.\n")
+
+# Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
+# (This could probably be done better because write_to_parset is in modules/function.py)
+with open(csv_filename, 'a') as csvfile:
     writer = csv.writer(csvfile)
-    writer.writerow(header)
+    if header:
+        writer.writerow(header)
 
     # Always start on a calibrator
     i = 1
@@ -481,8 +501,8 @@ print("IF THIS IS NOT A REAL SURVEY OBSERVATION BUT WILL BE OBSERVED, EDIT THE T
 print("##################################################################\n")
 
 # Calculate ecliptic for plotting
-year_arr = Time(args.starttime_utc) + np.linspace(0,364,365) * u.day
-obs_arr = Time(args.starttime_utc) + np.linspace(0,args.schedule_length,np.int(np.ceil(args.schedule_length*24))) * u.day
+year_arr = Time(args.starttime_utc) + np.linspace(0, 364, 365) * u.day
+obs_arr = Time(args.starttime_utc) + np.linspace(0, args.schedule_length, np.int(np.ceil(args.schedule_length * 24))) * u.day
 sun_year = get_sun(year_arr)
 sun_obs = get_sun(obs_arr)
 moon_obs = get_moon(obs_arr)
@@ -495,6 +515,7 @@ m.drawmeridians(np.arange(0, 360, 15), labels=[True, True, False, True], color='
 for f in flux_cal:
     xcal_ncp, ycal_ncp = m(f.ra.deg, f.dec.deg)
     m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
+m.plot(xcal_ncp, ycal_ncp, 'o', label='Calibrators', markersize=6, color='green')
 for p in pol_cal:
     xcal_ncp, ycal_ncp = m(p.ra.deg, p.dec.deg)
     m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
@@ -509,17 +530,21 @@ xpt_ncp, ypt_ncp = m(SkyCoord(np.array(apertif_fields['hmsdms'])).ra.deg,
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='SNS', mfc='none', color='0.1')
 for i, f in enumerate(apertif_fields):
     if (f['label'] == 'm') & (f['weights'] != 10):
-        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0.8', alpha=f['weights'] / 10)
+        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
         # print(f, 'red')
     elif (f['label'] == 's') & (f['weights'] == 0):
-        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0.8', alpha=f['weights'] / 10)
+        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
     elif (f['label'] == 'l') & (f['weights'] != 4):
-        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0.8', alpha=f['weights'] / 10)
-m.plot(0, 0, 'o', markersize=7, label='Already in ATDB', mfc='red', color='0.8')
+        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
+m.plot(0, 0, 'o', markersize=7, label='Already in ATDB', mfc='red', color='0')
+for p in scheduled_coords:
+    xpt_ncp, ypt_ncp = m(p.ra.deg, p.dec.deg)
+    m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, mfc='orange', color='0')
+if scheduled_coords:
+    m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='Previously scheduled', mfc='orange', color='0')
 for o in observed_pointings:
     xpt_ncp, ypt_ncp = m(o.ra.deg, o.dec.deg)
-    m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, mfc='blue')
-    # print(o, 'blue')
-m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='To be observed', mfc='blue', color='0.8')
+    m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, mfc='blue', color='0')
+m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='To be observed', mfc='blue', color='0')
 plt.legend(loc=1)
 plt.savefig(filename)
