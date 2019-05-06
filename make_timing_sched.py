@@ -2,8 +2,8 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 
 __author__ = "Kelley M. Hess"
-__date__ = "$02-may-2019 16:00:00$"
-__version__ = "0.6"
+__date__ = "$06-may-2019 16:00:00$"
+__version__ = "0.6.1"
 
 import csv
 import datetime
@@ -49,7 +49,7 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
         isB0329 = np.abs(current_lst.hour - psr_cal[2].ra.hour) < 5.0
         isB0950 = np.abs(current_lst.hour - psr_cal[3].ra.hour) < 5.0
     if calib_wait != 180:
-        print("Calibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
+        print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
 
     # Observe the calibrator(s) that is (are) up:
     if isB1933:
@@ -65,7 +65,7 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
         name = psr_names[3]
         psr = psr_cal[3]
     else:
-        print("Error: No known test pulsar visible. This should not be possible")
+        print("\tError: No known test pulsar visible. This should not be possible")
         exit()
 
     sun_position = get_sun(Time(obstime_utc, scale='utc'))
@@ -73,9 +73,9 @@ def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
     check_sun = sun_position.separation(psr)
     check_moon = moon_position.separation(psr)
     if check_sun.value < args.sun_distance:    # Can hard code this to a different value than target.
-        print("WARNING: {} is THIS close to Sun: {:5.2f}".format(name, check_sun))
+        print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(name, check_sun))
     if check_moon.value < 0.5:
-        print("WARNING: {} is within 0.5 deg of the Moon!".format(name))
+        print("\tWARNING: {} is within 0.5 deg of the Moon!".format(name))
 
     slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
                                  [psr.ra.radian, psr.dec.radian])
@@ -112,7 +112,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
             availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
         availability[availability < -12] += 24
     if targ_wait != 180:
-        print("Target not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
+        print("\tTarget not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
     sun_position = get_sun(Time(obstime_utc, scale='utc'))
     moon_position = get_moon(Time(obstime_utc, scale='utc'))
 
@@ -121,16 +121,16 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
         check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
         if check_sun.value < args.sun_distance:
-            print("WARNING: {} is THIS close to Sun: {:5.2f}".format(name, check_sun))
+            print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(name, check_sun))
         if check_moon.value < 0.5:
-            print("WARNING: {} is within 0.5 deg of the Moon.".format(name))
+            print("\tWARNING: {} is within 0.5 deg of the Moon.".format(name))
 
     else:
         first_field = random.choice(avail_fields[(availability < 0.5) & (availability > -0.5)])
         check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
         check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
         while (check_sun.value < args.sun_distance) or (check_moon.value < 0.5):
-            print("Sun or Moon too close to first pick; choose another target field")
+            print("\tSun or Moon too close to first pick; choose another target field")
             first_field = random.choice(avail_fields[(availability < 0.5) & (availability > -0.5)])
             check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
             check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
@@ -278,7 +278,8 @@ with open(csv_filename, 'w') as csvfile:
                 print(pq.get_pulsars(telescope_position))
         closest_field = None
 
-print("Ending observations! UTC: " + str(obstime_utc))
+print("\nEnding observations! UTC: " + str(obstime_utc))
+print("Total number of fields observed is: {}".format(len(observed_pointings)))
 print("Total wait time: {} mins is {:3.1f}% of total.".format(total_wait, total_wait * 60. / (obstime_utc - args.starttime_utc).total_seconds() * 100))
 print("\nThe schedule has been written to " + csv_filename)
 print("A map of the observed fields has been written to " + filename)
@@ -302,7 +303,7 @@ m.plot(xsun_moll,ysun_moll,'o-',markersize=2,label='Ecliptic/Sun',color='orange'
 xsunobs_moll,ysunobs_moll=m(sun_obs.ra.deg,sun_obs.dec.deg)
 xmoonobs_moll,ymoonobs_moll=m(moon_obs.ra.deg,moon_obs.dec.deg)
 m.plot(xmoonobs_moll,ymoonobs_moll,'o',markersize=5,label='Moon during observations',color='gray')
-m.plot(xpt_ncp, ypt_ncp, 'o', markersize=6, label='SNS', mfc='none', color='0.3')
+m.plot(xpt_ncp, ypt_ncp, 'o', markersize=6, label='ARTS', mfc='none', color='0.3')
 for i, f in enumerate(timing_fields):
     if (f['label'] == 't') & (f['weights'] == 0):
         m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0.8')
