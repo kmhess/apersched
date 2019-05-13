@@ -311,6 +311,7 @@ apertif_fields['weights'] = weights
 # apertif_fields=apertif_fields[((apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 21.9*15.))] # & (apertif_fields['dec'] > 30.)]
 
 ##################################################################
+
 #
 # IF YOU WANT TO EDIT THE FIELDS AVAILABLE TO THE SCHEDULER BEYOND THE INPUT FILE, DO THAT HERE:
 
@@ -365,13 +366,18 @@ try:
             i = np.where(apertif_fields['name'] == sch['source'])
             apertif_fields['weights'][i] -= 1
 except IOError:
-    print("Requested file of previously scheduled observations {} does not exist. Continuing.")
+    print("If file of previously scheduled observations was requested, it does not exist. Continuing.")
     scheduled_coords = []
 
-# Append schedule to end of previously existing file.
-if os.path.isfile(filename):
-    print("Output file exists; appending schedule to previous file {}".format(args.output))
+# Append schedule to end of previously existing file and tell the user what's happening.
+if (os.path.isfile(csv_filename) & os.path.isfile(args.previous_obs)):
+    print("Specified output file exists; appending schedule to previous file {}".format(csv_filename))
     header = False
+elif os.path.isfile(csv_filename):
+    print("Output file {} exists but not specified with '-p', so overwriting.".format(csv_filename))
+    os.remove(csv_filename)
+    header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam',
+              'switch_type', 'freqmode', 'centfreq']
 else:
     header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam',
               'switch_type', 'freqmode', 'centfreq']
