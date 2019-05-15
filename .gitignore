@@ -18,6 +18,7 @@ atdbquery/
 
 # Random stuff
 .idea/
+.ipynb
 
 # My organization folders
 tests/
