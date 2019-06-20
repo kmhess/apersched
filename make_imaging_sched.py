@@ -2,7 +2,7 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
 __date__ = "$06-may-2019 16:00:00$"
-__version__ = "0.11"
+__version__ = "0.12"
 
 import csv
 import datetime
@@ -55,70 +55,68 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     calib_wait = 0
 
     new_obstime_utc = obstime_utc
-    # Wait for calibrator to be at least an hour above the observing horizon, or not shadowed.
-    while not np.any(is_cal_up):  # and (calib_wait < 6. * 60.): # and (not is3c286):
-        calib_wait += dowait
-        new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
-        new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-        is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
-                     (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
-                     # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
-        diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
-        # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
-    n = np.where(is_cal_up)[0][0]
-    if calib_wait != 0 and calib_wait < 6. * 60:
-        total_wait += calib_wait
-        obstime_utc = new_obstime_utc
-        current_lst = new_lst
-        n = np.where(is_cal_up)[0][0]
-        print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
-    # Hopefully the following part is obsolete with the new calibrator.py and observing strategy.  (NOPE!)
-    elif calib_wait >= 6. * 60:
-        n = 1
-        calib_wait = 0
-        new_obstime_utc = obstime_utc
-        is_3c286_up = (current_lst.hour - pol_cal[n].ra.hour > -5.0) and (
-                    current_lst.hour - pol_cal[n].ra.hour < 2.0)
-        while not is_3c286_up:
+    # Added while wrapper so can break if wait for calibrator is longer than 6 hours.
+    go_on = True
+    while go_on is True:
+        # Wait for calibrator to be at least an hour above the observing horizon, or not shadowed.
+        while not np.any(is_cal_up):  # and (calib_wait < 6. * 60.): # and (not is3c286):
             calib_wait += dowait
             new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
             new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-            is_3c286_up = (new_lst.hour - pol_cal[n].ra.hour > -5.0) and (new_lst.hour - pol_cal[n].ra.hour < 2.0)
-        if calib_wait != 0:
+            is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
+                         (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
+                         # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
+            diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
+            # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
+        n = np.where(is_cal_up)[0][0]
+        if calib_wait != 0 and calib_wait < 6. * 60:
             total_wait += calib_wait
             obstime_utc = new_obstime_utc
             current_lst = new_lst
-            print("\tNOT OBSOLETE! Calibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
-            print("\t*** May need to provide an expanded target list. ***")
+            n = np.where(is_cal_up)[0][0]
+            print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
+        # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
+        elif calib_wait >= 6. * 60:
+            after_cal = obstime_utc
+            new_telescope_position = telescope_position
+            i -= 1
+            print("Must wait {} mins for target to rise.  Instead, go directly to target.".format(calib_wait))
+            print("\tIf this appears anywhere other than beginning of scheduling block, probably need to expanding "
+                  "options in pointing file.")
+            break
 
-    slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
-                                 [calibrators[n].ra.radian, calibrators[n].dec.radian])
-    if slew_seconds < calib_wait * 60.:
-        new_obstime_utc = obstime_utc + datetime.timedelta(minutes=calib_wait)
-    else:
-        new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
+        slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
+                                     [calibrators[n].ra.radian, calibrators[n].dec.radian])
+        if slew_seconds < calib_wait * 60.:
+            new_obstime_utc = obstime_utc + datetime.timedelta(minutes=calib_wait)
+        else:
+            new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
 
-    # Calculate appropriate observe time for the calibrator and observe it.
-    obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
-    if n == 1:
-        obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
-    after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
-    write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
+        # Calculate appropriate observe time for the calibrator and observe it.
+        obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
+        if n == 1:
+            obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
+        after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
+        write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
-    print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
-    sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
-    # print("Sun position: {}".format(sun_position))
-    check_sun = sun_position.separation(calibrators[n])
-    if check_sun.value < calib_sun_dist:
-        print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n], check_sun))
+        print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
+        sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
+        # print("Sun position: {}".format(sun_position))
+        check_sun = sun_position.separation(calibrators[n])
+        if check_sun.value < calib_sun_dist:
+            print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n], check_sun))
+        new_telescope_position = calibrators[n]
 
-    # Set up for next calibrator
-    if next_cal == 'flux':
-        next_cal = 'pol'
-    else:
-        next_cal = 'flux'
+        # Set up for next calibrator
+        if next_cal == 'flux':
+            next_cal = 'pol'
+        else:
+            next_cal = 'flux'
 
-    return i, after_cal, calibrators[n], total_wait, next_cal
+        # Only do one calibrator
+        go_on = False
+
+    return i, after_cal, new_telescope_position, total_wait, next_cal
 
 
 def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
@@ -274,9 +272,6 @@ parser.add_argument('-l', "--schedule_length", default=7.0,
 parser.add_argument('-d', "--sun_distance", default=30.0,
                     help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
-# parser.add_argument('-p', '--startposition',
-#                     default = 'input/atdbpointing_example.csv',
-#                     help = 'Specify the input file location (default: %(default)s)')
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
                     action='store_false')
@@ -379,12 +374,12 @@ except IOError:
     scheduled_coords = []
 
 # Append schedule to end of previously existing file and tell the user what's happening.
-if os.path.isfile(csv_filename) & os.path.isfile(args.previous_obs):
-    print("Specified output file exists; appending schedule to previous file {}".format(csv_filename))
-    header = False
-elif os.path.isfile(args.previous_obs) & args.copy_previous:
+if os.path.isfile(args.previous_obs) & args.copy_previous:
     print("-c selected: prepending previous file to new file {}".format(csv_filename))
     os.system("cp {} {}".format(args.previous_obs, csv_filename))
+    header = False
+elif os.path.isfile(csv_filename) & os.path.isfile(args.previous_obs):
+    print("Specified output file exists; appending schedule to previous file {}".format(csv_filename))
     header = False
 elif os.path.isfile(csv_filename):
     print("Output file {} exists but not specified with '-p', so overwriting.".format(csv_filename))
@@ -413,7 +408,7 @@ total_wait = 0
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
 # Also, writes out a record of what is observed, when, and if the telescope has to wait for objects to rise.
 print("\nStarting observations! UTC: " + str(args.starttime_utc))
-print("\n                       LST: " + str(current_lst))
+print("                       LST: " + str(current_lst))
 print("Calculating schedule for the following " + str(args.schedule_length) + " days.\n")
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.

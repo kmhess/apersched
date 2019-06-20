@@ -10,7 +10,7 @@ import datetime
 from .calibrators import *
 
 _int, lo, sub1, _type, weight, beam, sub2, centfreq, intent, switch_type, freqmode = \
-     '30', '4800', '64', 'T', 'compound', '0', '320', '1400', 'compound', '-', '300'
+     '30', '4800', '64', 'T', 'compound', '0', '320', '1280', 'compound', '-', '300'
 
 ###################################################################
 # Required functions for observing and writing observations to csv file.
