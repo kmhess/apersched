@@ -53,68 +53,63 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
                  # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
 
     calib_wait = 0
-
     new_obstime_utc = obstime_utc
-    # Added while wrapper so can break if wait for calibrator is longer than 6 hours.
-    go_on = True
-    while go_on is True:
-        # Wait for calibrator to be at least an hour above the observing horizon, or not shadowed.
-        while not np.any(is_cal_up):  # and (calib_wait < 6. * 60.): # and (not is3c286):
-            calib_wait += dowait
-            new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
-            new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-            is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
-                         (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
-                         # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
-            diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
-            # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
+
+    # Wait for calibrator to be at least an hour above the observing horizon, or not shadowed.
+    while not np.any(is_cal_up):  # and (calib_wait < 6. * 60.): # and (not is3c286):
+        calib_wait += dowait
+        new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
+        new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
+        is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
+                     (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
+                     # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
+        diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
+        # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
+    n = np.where(is_cal_up)[0][0]
+    if calib_wait != 0 and calib_wait < 4. * 60:  # 6. * 60:
+        total_wait += calib_wait
+        obstime_utc = new_obstime_utc
+        current_lst = new_lst
         n = np.where(is_cal_up)[0][0]
-        if calib_wait != 0 and calib_wait < 6. * 60:
-            total_wait += calib_wait
-            obstime_utc = new_obstime_utc
-            current_lst = new_lst
-            n = np.where(is_cal_up)[0][0]
-            print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
-        # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
-        elif calib_wait >= 6. * 60:
-            after_cal = obstime_utc
-            new_telescope_position = telescope_position
-            i -= 1
-            print("Must wait {} mins for target to rise.  Instead, go directly to target.".format(calib_wait))
-            print("\tIf this appears anywhere other than beginning of scheduling block, probably need to expanding "
-                  "options in pointing file.")
-            break
+        print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
+    # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
+    elif calib_wait >= 4. * 60:   # 6. * 60:
+        after_cal = obstime_utc - datetime.timedelta(minutes=syswait)
+        new_telescope_position = telescope_position
+        i -= 1
+        print("Must wait {} hours for calibrator to rise.  Instead, go directly to target.".format(calib_wait/60.))
+        print("\tIf this appears anywhere other than beginning of scheduling block, probably need to expanding "
+              "options in pointing file.")
+        # break
+        return i, after_cal, new_telescope_position, total_wait, next_cal
 
-        slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
+    slew_seconds = calc_slewtime([telescope_position.ra.radian, telescope_position.dec.radian],
                                      [calibrators[n].ra.radian, calibrators[n].dec.radian])
-        if slew_seconds < calib_wait * 60.:
-            new_obstime_utc = obstime_utc + datetime.timedelta(minutes=calib_wait)
-        else:
-            new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
+    if slew_seconds < calib_wait * 60.:
+        new_obstime_utc = obstime_utc + datetime.timedelta(minutes=calib_wait)
+    else:
+        new_obstime_utc = obstime_utc + datetime.timedelta(seconds=slew_seconds)
 
-        # Calculate appropriate observe time for the calibrator and observe it.
-        obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
-        if n == 1:
-            obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
-        after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
-        write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
+    # Calculate appropriate observe time for the calibrator and observe it.
+    obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
+    if n == 1:
+        obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
+    after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
+    write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
-        print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
-        sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
-        # print("Sun position: {}".format(sun_position))
-        check_sun = sun_position.separation(calibrators[n])
-        if check_sun.value < calib_sun_dist:
-            print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n], check_sun))
-        new_telescope_position = calibrators[n]
+    print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
+    sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
+    # print("Sun position: {}".format(sun_position))
+    check_sun = sun_position.separation(calibrators[n])
+    if check_sun.value < calib_sun_dist:
+        print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n], check_sun))
+    new_telescope_position = calibrators[n]
 
-        # Set up for next calibrator
-        if next_cal == 'flux':
-            next_cal = 'pol'
-        else:
-            next_cal = 'flux'
-
-        # Only do one calibrator
-        go_on = False
+    # Set up for next calibrator
+    if next_cal == 'flux':
+        next_cal = 'pol'
+    else:
+        next_cal = 'flux'
 
     return i, after_cal, new_telescope_position, total_wait, next_cal
 
@@ -208,13 +203,24 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         print("\tTarget not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
 
     if targ_wait <= wait_limit * 60:
-        # THIS DOESN'T WORK YET!
+        # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
         if 'M1403+5324' in avail_fields[(availability < 0.00) & (availability > -0.48)]['name']:
-            first_field = avail_fields[avail_fields['name'] == 'M1403+5324']
-            print("HERE!! ", first_field)
+            first_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
+            print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
+        elif 'M1403+5324' in avail_fields[(availability < 1.00) & (availability > 0)]['name']:
+            m101_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
+            m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
+            while not (m101_availability < 0.00) & (m101_availability > -0.48):
+                targ_wait += dowait
+                new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
+                current_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
+                proposed_ra = (current_lst + Longitude('6h')).wrap_at(360 * u.deg)
+                m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
+                # m101_availability[m101_availability < -12] += 24
+            first_field = m101_field
+            print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         else:
             first_field = avail_fields[(availability < 0.00) & (availability > -0.48)][0]
-        # ABOVE DOESN'T WORK YET!
         sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
         moon_position = get_moon(Time(new_obstime_utc, scale='utc'))
         # print("Sun position: {}".format(sun_position))
@@ -240,7 +246,8 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
     else:
         print("\tNo target for {} hours. Go to a calibrator instead.".format(targ_wait/60.))
-        return i, obstime_utc, telescope_position, total_wait
+        print("\tNo target for {} hours. NEED TO EXPAND TARGET OPTIONS AND RERUN!".format(targ_wait/60.))
+        return i, obstime_utc + datetime.timedelta(days=100), telescope_position, total_wait
 
 ###################################################################
 
@@ -272,6 +279,9 @@ parser.add_argument('-l', "--schedule_length", default=7.0,
 parser.add_argument('-d', "--sun_distance", default=30.0,
                     help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
+parser.add_argument('-r', "--repeat_m101",
+                    help="If option is included, Try to schedule the M101 field once this time. Works until it's been observed to MDS depth.",
+                    action='store_true')
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
                     action='store_false')
@@ -281,11 +291,6 @@ parser.add_argument('-v', "--verbose",
 
 # Parse the arguments above
 args = parser.parse_args()
-
-# This functionality needs more testing
-# User supplied field (will choose nearest survey pointing from file later):
-# start_pos = SkyCoord.from_name('Abell 262')
-start_pos = None
 
 # Filename for the csv file of observed fields:
 csv_filename = 'imaging_sched_{}.csv'.format(args.output)
@@ -303,16 +308,13 @@ dowait = 2
 fields = Table(ascii.read(args.filename, format='fixed_width'))
 apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's')]
 # apertif_fields = fields[(fields['label'] == 'l') | (fields['label'] == 'm') | (fields['label'] == 's')]
-# apertif_fields = fields[(fields['label'] == 'm')]
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
 weights[apertif_fields['label'] == 'l'] = 4
+
 # Add "weights" column to table.
 apertif_fields['weights'] = weights
-
-# # Get rid of very beginning of Fall sky (unstable to current algorithm)
-# apertif_fields=apertif_fields[((apertif_fields['ra'] < 20.*15.) | (apertif_fields['ra'] > 21.9*15.))] # & (apertif_fields['dec'] > 30.)]
 
 ##################################################################
 
@@ -327,13 +329,6 @@ apertif_fields['weights'] = weights
 # apertif_fields=apertif_fields[(apertif_fields['ra'] > 6*15.) & (apertif_fields['ra'] < 20.*15.) |
 #                               (apertif_fields['label'] == 'm')]
 # # Make all of Spring sky weights=1 (no repeats; for 2nd week of 4 week operations rehearsal)
-# apertif_fields[(apertif_fields['ra'] > 6*15.) & (apertif_fields['ra'] < 20.*15.)]['weights'] = 1
-
-# # Get rid of all but CVn in Spring sky (for 2nd week of 4 week operations rehearsal)
-# apertif_fields=apertif_fields[(apertif_fields['ra'] < 6*15.) | (apertif_fields['ra'] > 20.*15.) |
-#                               ((apertif_fields['label'] == 'm') & (apertif_fields['ra'] > 12*15.) & (apertif_fields['ra'] < 13*15.) &
-#                                (apertif_fields['dec'] > 32.) & (apertif_fields['dec'] < 50.))]
-# # Make all of Fall sky weights=1 (no repeats; for 2nd week of 4 week operations rehearsal)
 # apertif_fields[(apertif_fields['ra'] > 6*15.) & (apertif_fields['ra'] < 20.*15.)]['weights'] = 1
 
 #
@@ -372,6 +367,15 @@ try:
 except IOError:
     print("If file of previously scheduled observations was requested, it does not exist. Continuing.")
     scheduled_coords = []
+
+# Try to repeat M101 once at users request by appropriately modifying the weights after they are read in from the pointing file.
+if args.repeat_m101:
+    if apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] > 0:
+        apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] = 1
+    else:
+        print("M1403+5324 with M101 & scintillating source already observed to full depth. Will not force to schedule.")
+else:
+    apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] = 0
 
 # Append schedule to end of previously existing file and tell the user what's happening.
 if os.path.isfile(args.previous_obs) & args.copy_previous:
@@ -418,7 +422,7 @@ with open(csv_filename, 'a') as csvfile:
     if header:
         writer.writerow(header)
 
-    # Always start on a calibrator
+    # Always start on a calibrator (unless the wait time is too long; modified in do_calibration_40b)
     i = 1
     if args.all_beam_calib:
         i, new_obstime_utc, new_position, total_wait, next_cal = \
@@ -545,7 +549,7 @@ xpt_ncp, ypt_ncp = m(SkyCoord(np.array(apertif_fields['hmsdms'])).ra.deg,
                      SkyCoord(np.array(apertif_fields['hmsdms'])).dec.deg)
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='SNS', mfc='none', color='0.1')
 for i, f in enumerate(apertif_fields):
-    if (f['label'] == 'm') & (f['weights'] != 10):
+    if (f['label'] == 'm') & (f['weights'] != 10) & (f['name'] != "M1403+5324"):
         m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
         # print(f, 'red')
     elif (f['label'] == 's') & (f['weights'] == 0):
