@@ -29,7 +29,7 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime, 
     elif ('S' in source_name) or ('M' in source_name):
         all_cols = [source, ra, '', dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type, freqmode, centfreq]
     else:
-        all_cols=[source, ra, '', dec, date1, time1, date2, time2, '1400', 'square_39p1', '0', '39', str(pulsar), '0']
+        all_cols=[source, ra, '', dec, date1, time1, date2, time2, '1280', 'square_39p1', '0', '39', str(pulsar), '0']
     writer.writerow(all_cols)
 
 

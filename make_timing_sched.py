@@ -171,6 +171,9 @@ parser.add_argument('-p', "--check_pulsars",
 parser.add_argument('-d', "--sun_distance", default=30.0,
                     help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
+parser.add_argument('-m', "--min_dec", default=10.0,
+                    help="Minimum declination in decimal degrees used for survey pointings (default: %(default)s).",
+                    type=float)
 
 
 # Parse the arguments above
@@ -201,9 +204,12 @@ weights = np.ones(len(timing_fields))  # Each timing field should be observed on
 # weights[apertif_fields['label']=='m'] = 10     # How to modify other fields.
 timing_fields['weights'] = weights  # Add "weights" column to table.
 
+# select Dec
+timing_fields = timing_fields[timing_fields['dec'] >= args.min_dec]
+
 print("\n##################################################################")
 print("Number of all-sky fields are: {}".format(len(fields)))
-print("Number of Timing fields are: {}".format(len(timing_fields)))
+print("Number of Timing fields above Dec={} are: {}".format(args.min_dec, len(timing_fields)))
 
 # Retrieve names of observations from ATDB (excludes calibrator scans)
 if args.check_atdb:
@@ -235,7 +241,7 @@ closest_field = None
 
 # Open & prepare CSV file to write parset parameters to, in format given by V.M. Moss.
 # (This could probably be done better because write_to_parset is in modules/function.py)
-header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'freq', 'weight', 'sbeam', 'ebeam', 'pulsar', 'beam']
+header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'centfreq', 'weight', 'sbeam', 'ebeam', 'pulsar', 'beam']
 
 # Do the observations: select calibrators and target fields, and write the output to a CSV file.
 # Also, writes out a record of what is observed, when, and if the telescope has to wait for objects to rise.
