@@ -183,7 +183,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
                                       [proposed_ra.radian, telescope_position.dec.radian])
 
     avail_fields = apertif_fields[apertif_fields['weights'] > 0]
-    availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour + test_slew_seconds / 3600.
+    availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour - test_slew_seconds / 3600.
     availability[availability < -12] += 24
 
     targ_wait = 0     # minutes

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 modules/__pycache__
+.DS_Store
 
 # Other modules
 atdbquery/
@@ -18,9 +19,9 @@ atdbquery/
 
 # Random stuff
 .idea/
-.ipynb
+*.ipynb
 
 # My organization folders
 tests/
 observed/
-old_output/
+simulations/
