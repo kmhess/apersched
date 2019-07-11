@@ -1,8 +1,8 @@
 # make_imaging_sched: Make a schedule for Apertif imaging
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
-__date__ = "$06-may-2019 16:00:00$"
-__version__ = "0.12"
+__date__ = "$11-jul-2019 16:00:00$"
+__version__ = "1.0"
 
 import csv
 import datetime
@@ -389,10 +389,10 @@ elif os.path.isfile(csv_filename):
     print("Output file {} exists but not specified with '-p', so overwriting.".format(csv_filename))
     os.remove(csv_filename)
     header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam',
-              'switch_type', 'freqmode', 'centfreq']
+              'switch_type', 'freqmode', 'centfreq', 'template']
 else:
     header = ['source', 'ra', 'ha', 'dec', 'date1', 'time1', 'date2', 'time2', 'int', 'type', 'weight', 'beam',
-              'switch_type', 'freqmode', 'centfreq']
+              'switch_type', 'freqmode', 'centfreq', 'template']
 
 print("Will shift pointings if Sun is within {} degrees.".format(args.sun_distance))
 
