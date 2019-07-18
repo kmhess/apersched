@@ -1,8 +1,8 @@
 # make_imaging_sched: Make a schedule for Apertif imaging
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
-__date__ = "$11-jul-2019 16:00:00$"
-__version__ = "1.0"
+__date__ = "$18-jul-2019 16:00:00$"
+__version__ = "1.1"
 
 import csv
 import datetime
@@ -77,6 +77,8 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         after_cal = obstime_utc - datetime.timedelta(minutes=syswait)
         new_telescope_position = telescope_position
         i -= 1
+        # If can't do any pol at beginning, first must be a flux cal:
+        next_cal = 'flux'
         print("Must wait {} hours for calibrator to rise.  Instead, go directly to target.".format(calib_wait/60.))
         print("\tIf this appears anywhere other than beginning of scheduling block, probably need to expanding "
               "options in pointing file.")
