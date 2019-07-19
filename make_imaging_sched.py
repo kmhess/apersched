@@ -2,7 +2,7 @@
 # K.M.Hess 19/02/2019 (hess@astro.rug.nl)
 __author__ = "Kelley M. Hess"
 __date__ = "$18-jul-2019 16:00:00$"
-__version__ = "1.1"
+__version__ = "1.1.1"
 
 import csv
 import datetime
@@ -342,7 +342,7 @@ print("Number of Apertif imaging fields are: {}".format(len(apertif_fields)))
 
 # Retrieve names of observations from ATDB (excludes calibrator scans)
 if args.check_atdb:
-    observations = atdbquery.atdbquery(obs_mode='imaging')
+    observations = atdbquery.atdbquery(obs_mode='imaging', failures=False, transient=False)
     imaging_obs = [dict(observations[i])['name'] for i in range(len(observations))
                    if (dict(observations[i])['name'][0:2] != '3c') and (dict(observations[i])['name'][0:2] != '3C')
                    and (dict(observations[i])['name'][0:2] != 'CT')]
