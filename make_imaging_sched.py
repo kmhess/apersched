@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 import numpy as np
 
-from atdbquery import atdbquery
+import atdbquery
 from modules.calc_slewtime import calc_slewtime  # Wants [ra,dec] start/end positions in radians; outputs seconds.
 from modules.calibrators import *
 from modules.functions import *
