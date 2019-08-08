@@ -265,7 +265,7 @@ parser.add_argument('-c', '--copy_previous',
                     help='Copy file of previously scheduled pointings and append to it. (Default: False.)',
                     action='store_true')
 parser.add_argument('-o', '--output', default='temp',
-                    help='Specify the root of output csv and png files. If file exists, append to it (default: imaging_sched_%(default)s.csv).')
+                    help='Specify the root of output csv and png files. If file exists, append to it (default: imaging_%(default)s.csv).')
 parser.add_argument('-b', "--all_beam_calib",
                     help="Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
                     action='store_true')
@@ -295,7 +295,7 @@ parser.add_argument('-v', "--verbose",
 args = parser.parse_args()
 
 # Filename for the csv file of observed fields:
-csv_filename = 'imaging_sched_{}.csv'.format(args.output)
+csv_filename = 'imaging_{}.csv'.format(args.output)
 
 # Filename for the map of observed fields:
 filename = 'imaging_map_{}.png'.format(args.output)
