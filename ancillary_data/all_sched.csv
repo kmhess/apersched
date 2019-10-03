@@ -46,3 +46,4 @@ S2345+3130,23:45:35,,+31:30:45,2019-09-20,17:25:18,2019-09-21,04:55:18,30,T,comp
 S1454+5550,14:54:12,,+55:50:00,2019-09-21,08:30:06,2019-09-21,20:00:06,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
 S0218+3848,02:18:10,,+38:48:32,2019-09-21,20:11:41,2019-09-22,07:41:41,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
 S2240+3130,22:40:43,,+31:30:45,2019-09-22,16:31:24,2019-09-23,04:01:24,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+
