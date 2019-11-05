@@ -185,7 +185,8 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
                                       [proposed_ra.radian, telescope_position.dec.radian])
 
     avail_fields = apertif_fields[apertif_fields['weights'] > 0]
-    availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour - test_slew_seconds / 3600.
+    availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour + test_slew_seconds / 3600.
+    print("Debug: ",current_lst,proposed_ra,test_slew_seconds)
     availability[availability < -12] += 24
 
     targ_wait = 0     # minutes
@@ -257,7 +258,7 @@ parser = ArgumentParser(description="Make observing schedule for the Apertif ima
                                     "Outputs a png of the completed and scheduled pointings.",
                         formatter_class=RawTextHelpFormatter)
 
-parser.add_argument('-f', '--filename', default='./ancillary_data/all_pointings.v5.29apr19.txt',
+parser.add_argument('-f', '--filename', default='./ancillary_data/apertif_6mos2.03oct19.txt', #all_pointings.v5.29apr19.txt',
                     help='Specify the input file of pointings to choose from (default: %(default)s).')
 parser.add_argument('-p', '--previous_obs', default='',
                     help='Specify a file of previously scheduled pointings. (No default.)')
@@ -268,14 +269,14 @@ parser.add_argument('-o', '--output', default='temp',
                     help='Specify the root of output csv and png files. If file exists, append to it (default: imaging_%(default)s.csv).')
 parser.add_argument('-b', "--all_beam_calib",
                     help="Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
-                    action='store_true')
+                    action='store_false')     #CHANGE BACK TO STORE TRUE
 parser.add_argument('-m', "--mins_per_beam", default=3.0,
                     help="Number of minutes for calibrator in 40b scan (default: %(default)s).",
                     type=float)
 parser.add_argument('-s', "--starttime_utc", default="2019-07-01 08:00:00",
                     help="The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
                     type=datetime.datetime.fromisoformat)
-parser.add_argument('-l', "--schedule_length", default=7.0,
+parser.add_argument('-l', "--schedule_length", default=3.0,
                     help="Number of days to schedule (can be float; default: %(default)s).",
                     type=float)
 parser.add_argument('-d', "--sun_distance", default=30.0,
@@ -286,7 +287,7 @@ parser.add_argument('-r', "--repeat_m101",
                     action='store_true')
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
-                    action='store_false')
+                    action='store_true')   #CHANGE BACK TO STORE FALSE
 parser.add_argument('-v', "--verbose",
                     help="If option is included, print updated UTC times after each scan.",
                     action='store_true')
