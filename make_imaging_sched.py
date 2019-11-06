@@ -97,6 +97,9 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     if n == 1:
         obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
+    if i == 1:
+        write_to_csv(csvfile, 'imaging_start', calibrators[n], new_obstime_utc - datetime.timedelta(minutes=3.0),
+                     new_obstime_utc - datetime.timedelta(minutes=2.0))
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
     print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
@@ -186,7 +189,6 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
 
     avail_fields = apertif_fields[apertif_fields['weights'] > 0]
     availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour + test_slew_seconds / 3600.
-    print("Debug: ",current_lst,proposed_ra,test_slew_seconds)
     availability[availability < -12] += 24
 
     targ_wait = 0     # minutes
@@ -269,14 +271,14 @@ parser.add_argument('-o', '--output', default='temp',
                     help='Specify the root of output csv and png files. If file exists, append to it (default: imaging_%(default)s.csv).')
 parser.add_argument('-b', "--all_beam_calib",
                     help="Default behavior is 15 minutes on a calibrator in the central beam. If option is included, run 40 beam calibration.",
-                    action='store_false')     #CHANGE BACK TO STORE TRUE
+                    action='store_true')
 parser.add_argument('-m', "--mins_per_beam", default=3.0,
                     help="Number of minutes for calibrator in 40b scan (default: %(default)s).",
                     type=float)
 parser.add_argument('-s', "--starttime_utc", default="2019-07-01 08:00:00",
                     help="The start time in ** UTC ** ! - format 'YYYY-MM-DD HH:MM:SS' (default: '%(default)s').",
                     type=datetime.datetime.fromisoformat)
-parser.add_argument('-l', "--schedule_length", default=3.0,
+parser.add_argument('-l', "--schedule_length", default=7.0,
                     help="Number of days to schedule (can be float; default: %(default)s).",
                     type=float)
 parser.add_argument('-d', "--sun_distance", default=30.0,
@@ -287,7 +289,7 @@ parser.add_argument('-r', "--repeat_m101",
                     action='store_true')
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
-                    action='store_true')   #CHANGE BACK TO STORE FALSE
+                    action='store_false')
 parser.add_argument('-v', "--verbose",
                     help="If option is included, print updated UTC times after each scan.",
                     action='store_true')
@@ -441,7 +443,7 @@ with open(csv_filename, 'a') as csvfile:
             Time(obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.")
 
     # Iterate between (2) target(s) and calibrators for the specified amount of time & write to CSV file:
-    while obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length) - datetime.timedelta(hours=8.):
+    while obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length) - datetime.timedelta(hours=10.):
         i += 1
         i, new_obstime_utc, new_position, total_wait = do_target_observation(i, obstime_utc, telescope_position, writer,
                                                                              total_wait)
@@ -474,7 +476,7 @@ with open(csv_filename, 'a') as csvfile:
             obstime_utc = new_obstime_utc + datetime.timedelta(minutes=2.0)
             total_wait += 2
             telescope_position = new_position
-            if obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length) - datetime.timedelta(hours=8.):
+            if obstime_utc < args.starttime_utc + datetime.timedelta(days=args.schedule_length) - datetime.timedelta(hours=10.):
                 continue
             else:
                 break
@@ -511,6 +513,12 @@ with open(csv_filename, 'a') as csvfile:
         obstime_utc = new_obstime_utc + datetime.timedelta(minutes=2.0)
         total_wait += 2
         telescope_position = new_position
+
+# Write the last line of the csv file
+ha = telescope_position.ra.hour - Time(obstime_utc).sidereal_time('apparent', westerbork().lon).hour
+with open(csv_filename, 'a') as csvfile:
+    writer = csv.writer(csvfile)
+    write_to_csv(writer, 'imaging_end', telescope_position, obstime_utc, obstime_utc + datetime.timedelta(minutes=1.0))
 
 print("\nEnding observations! UTC: " + str(obstime_utc))
 print("Total number of survey fields observed is: {}".format(len(observed_pointings)))
