@@ -20,7 +20,7 @@ template = '/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhas
 def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime, pulsar=False):
     # scan='{}{:03d}'.format(start_datetime.strftime('%Y%m%d'),i)
     # source='{}_{}'.format(source_name.split('_')[0],start_datetime.strftime('%Y%m%d'))
-    source = '{}'.format(source_name.split('_')[0])
+    source = source_name #'{}'.format(source_name.split('_')[0])
     ra = str(source_pos.to_string('hmsdms').split(' ')[0]).replace('h', ':').replace('m', ':').replace('s', '')
     dec = str(source_pos.to_string('hmsdms').split(' ')[1]).replace('d', ':').replace('m', ':').replace('s', '')
     date1, time1 = start_datetime.strftime('%Y-%m-%d'), start_datetime.strftime('%H:%M:%S')
@@ -29,8 +29,11 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime, 
         all_cols = [source, ra, '', dec, date1, time1, date2, time2, '10', 'S*', weight, beam, 'system', freqmode, centfreq, template]
     elif ('S' in source_name) or ('M' in source_name):
         all_cols = [source, ra, '', dec, date1, time1, date2, time2, _int, _type, weight, beam, switch_type, freqmode, centfreq, template]
+    elif (source_name == 'imaging_start') or (source_name == 'imaging_end'):
+        all_cols = [source, ra, '', dec, date1, time1, date2, time2, '10', _type, weight, beam, switch_type, freqmode,
+                    centfreq, template]
     else:
-        all_cols=[source, ra, '', dec, date1, time1, date2, time2, '1280', 'square_39p1', '0', '39', str(pulsar), '0']
+        all_cols = [source, ra, '', dec, date1, time1, date2, time2, '1280', 'square_39p1', '0', '39', str(pulsar), '0']
     writer.writerow(all_cols)
 
 
