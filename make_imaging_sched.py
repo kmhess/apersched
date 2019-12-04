@@ -63,17 +63,15 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
                      (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
                      # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
-        diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
+        # diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
         # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
     n = np.where(is_cal_up)[0][0]
-    if calib_wait != 0 and calib_wait < 4. * 60:  # 6. * 60:
+    if calib_wait != 0 and calib_wait < 4.0 * 60:
         total_wait += calib_wait
-        obstime_utc = new_obstime_utc
-        current_lst = new_lst
         n = np.where(is_cal_up)[0][0]
-        print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(current_lst)))
+        print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(new_lst)))
     # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
-    elif calib_wait >= 4. * 60:   # 6. * 60:
+    elif calib_wait >= 4.0 * 60:
         after_cal = obstime_utc - datetime.timedelta(minutes=syswait)
         new_telescope_position = telescope_position
         i -= 1
@@ -188,26 +186,26 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
                                       [proposed_ra.radian, telescope_position.dec.radian])
 
     avail_fields = apertif_fields[apertif_fields['weights'] > 0]
-    availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour + test_slew_seconds / 3600.
-    availability[availability < -12] += 24
+    availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour - test_slew_seconds / 3600.
+    availability[availability < -12.] += 24.
 
-    targ_wait = 0     # minutes
-    wait_limit = 7.0  # hours
+    targ_wait = 0.     # minutes
+    wait_limit = 5.0  # hours
 
     new_obstime_utc = obstime_utc
     # First check what is *already* up.  If nothing, then wait for something to rise.
     while not np.any((availability < 0.00) & (availability > -0.48)):
         targ_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
-        current_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-        proposed_ra = (current_lst + Longitude('6h')).wrap_at(360 * u.deg)
+        new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
+        proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
         availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour
-        availability[availability < -12] += 24
-    if (targ_wait != 0) and (targ_wait <= wait_limit * 60):
+        availability[availability < -12.] += 24.
+    if (targ_wait != 0.) and (targ_wait <= wait_limit * 60.):
         total_wait += targ_wait
-        print("\tTarget not up, waiting {} minutes until LST: {}".format(targ_wait, str(current_lst)))
+        print("\tTarget not up, waiting {} minutes until LST: {}".format(targ_wait, str(new_lst)))
 
-    if targ_wait <= wait_limit * 60:
+    if targ_wait <= wait_limit * 60.:
         # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
         if 'M1403+5324' in avail_fields[(availability < 0.00) & (availability > -0.48)]['name']:
             first_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
@@ -218,8 +216,8 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
             while not (m101_availability < 0.00) & (m101_availability > -0.48):
                 targ_wait += dowait
                 new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
-                current_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-                proposed_ra = (current_lst + Longitude('6h')).wrap_at(360 * u.deg)
+                new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
+                proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
                 m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
                 # m101_availability[m101_availability < -12] += 24
             first_field = m101_field
@@ -251,8 +249,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
     else:
         print("\tNo target for {} hours. Go to a calibrator instead.".format(targ_wait/60.))
-        print("\tNo target for {} hours. NEED TO EXPAND TARGET OPTIONS AND RERUN!".format(targ_wait/60.))
-        return i, obstime_utc + datetime.timedelta(days=100), telescope_position, total_wait
+        return i, obstime_utc, telescope_position, total_wait
 
 ###################################################################
 
@@ -312,11 +309,9 @@ dowait = 2
 #         h=NCP that will be covered with hexagonal compound beam arrangement
 fields = Table(ascii.read(args.filename, format='fixed_width'))
 apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's')]
-# apertif_fields = fields[(fields['label'] == 'l') | (fields['label'] == 'm') | (fields['label'] == 's')]
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
-weights[apertif_fields['label'] == 'l'] = 4
 
 # Add "weights" column to table.
 apertif_fields['weights'] = weights
@@ -543,13 +538,6 @@ plt.figure(figsize=[8, 8])
 m = Basemap(projection='nplaea', boundinglat=20, lon_0=310, resolution='l', celestial=True)
 m.drawparallels(np.arange(30, 90, 15), labels=[False, False, False, False], color='darkgray')
 m.drawmeridians(np.arange(0, 360, 15), labels=[True, True, False, True], color='darkgray', latmax=90)
-for f in flux_cal:
-    xcal_ncp, ycal_ncp = m(f.ra.deg, f.dec.deg)
-    m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
-m.plot(xcal_ncp, ycal_ncp, 'o', label='Calibrators', markersize=6, color='green')
-for p in pol_cal:
-    xcal_ncp, ycal_ncp = m(p.ra.deg, p.dec.deg)
-    m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
 xsun_moll, ysun_moll = m(sun_year.ra.deg, sun_year.dec.deg)
 m.plot(xsun_moll, ysun_moll, 'o-', markersize=2, label='Ecliptic', color='orange')
 xsunobs_moll, ysunobs_moll = m(sun_obs.ra.deg, sun_obs.dec.deg)
@@ -560,12 +548,9 @@ xpt_ncp, ypt_ncp = m(SkyCoord(np.array(apertif_fields['hmsdms'])).ra.deg,
                      SkyCoord(np.array(apertif_fields['hmsdms'])).dec.deg)
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='SNS', mfc='none', color='0.1')
 for i, f in enumerate(apertif_fields):
-    if (f['label'] == 'm') & (f['weights'] != 10) & (f['name'] != "M1403+5324"):
+    if (f['label'] == 'm') & (f['weights'] != 1) & (f['name'] != "M1403+5324"):
         m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
-        # print(f, 'red')
     elif (f['label'] == 's') & (f['weights'] == 0):
-        m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
-    elif (f['label'] == 'l') & (f['weights'] != 4):
         m.plot(xpt_ncp[i], ypt_ncp[i], 'o', markersize=7, mfc='red', color='0')
 m.plot(0, 0, 'o', markersize=7, label='Already in ATDB', mfc='red', color='0')
 for p in scheduled_coords:
@@ -577,6 +562,13 @@ for o in observed_pointings:
     xpt_ncp, ypt_ncp = m(o.ra.deg, o.dec.deg)
     m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, mfc='blue', color='0')
 m.plot(xpt_ncp, ypt_ncp, 'o', markersize=7, label='To be observed', mfc='blue', color='0')
+for f in flux_cal:
+    xcal_ncp, ycal_ncp = m(f.ra.deg, f.dec.deg)
+    m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
+m.plot(xcal_ncp, ycal_ncp, 'o', label='Calibrators', markersize=6, color='green')
+for p in pol_cal:
+    xcal_ncp, ycal_ncp = m(p.ra.deg, p.dec.deg)
+    m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
 plt.legend(loc=1)
 plt.title("Imaging survey fields {}".format(args.starttime_utc))
 plt.savefig(filename)
