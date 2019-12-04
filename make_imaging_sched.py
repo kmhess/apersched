@@ -249,6 +249,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         return i, after_target, SkyCoord(first_field['hmsdms']), total_wait
     else:
         print("\tNo target for {} hours. Go to a calibrator instead.".format(targ_wait/60.))
+        i -= 1
         return i, obstime_utc, telescope_position, total_wait
 
 ###################################################################
@@ -481,16 +482,16 @@ with open(csv_filename, 'a') as csvfile:
             i += 1
             i, new_obstime_utc, new_position, total_wait = do_target_observation(i, obstime_utc, telescope_position,
                                                                                  writer, total_wait)
-            if args.verbose:
-                print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
-                    Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
-                print("\tTotal time between end of scans: {:0.4} hours".format(
-                    (new_obstime_utc - obstime_utc).seconds / 3600.))
-            # obstime_utc = new_obstime_utc
-            obstime_utc = new_obstime_utc + datetime.timedelta(minutes=2.0)
-            total_wait += 2
-            telescope_position = new_position
-            observed_pointings.append(telescope_position)
+            if new_position != telescope_position:
+                if args.verbose:
+                    print("\tUTC: " + str(new_obstime_utc) + ",  LST: " + str(
+                        Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)) + " at end of scan.", end="")
+                    print("\tTotal time between end of scans: {:0.4} hours".format(
+                        (new_obstime_utc - obstime_utc).seconds / 3600.))
+                obstime_utc = new_obstime_utc + datetime.timedelta(minutes=2.0)
+                total_wait += 2
+                telescope_position = new_position
+                observed_pointings.append(telescope_position)
 
         # Always finish on a calibrator
         i += 1
