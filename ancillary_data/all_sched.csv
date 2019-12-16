@@ -89,3 +89,10 @@ S2229+3622,22:29:36,,+36:22:36,2019-11-23,11:56:08,2019-11-23,23:26:08,30,T,comp
 M1330+2904,13:30:03,,+29:04:49,2019-11-24,03:00:49,2019-11-24,14:30:49,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
 M0209+3622,02:09:01,,+36:22:36,2019-11-24,15:30:49,2019-11-25,03:00:49,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
 S2232+3848,22:32:17,,+38:48:32,2019-11-25,11:49:58,2019-11-25,23:19:58,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+S1103+5550,11:03:48,,+55:50:00,2019-12-06,00:07:41,2019-12-06,11:37:41,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+S2248+3356,22:48:39,,+33:56:40,2019-12-06,11:49:34,2019-12-06,23:19:34,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+M1403+5324,14:03:24,,+53:24:05,2019-12-07,02:54:28,2019-12-07,14:24:28,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+M0155+3356,01:55:19,,+33:56:40,2019-12-07,14:36:27,2019-12-08,02:06:27,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+S2236+4114,22:36:08,,+41:14:27,2019-12-08,11:03:48,2019-12-08,22:33:48,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+M1342+2904,13:42:41,,+29:04:49,2019-12-09,02:08:34,2019-12-09,13:38:34,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+S0129+3130,01:29:22,,+31:30:45,2019-12-09,13:52:34,2019-12-10,01:22:34,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
