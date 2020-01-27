@@ -313,6 +313,7 @@ apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's')]
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
+weights[apertif_fields['label'] == 'l'] = 3
 
 # Add "weights" column to table.
 apertif_fields['weights'] = weights
