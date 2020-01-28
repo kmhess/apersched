@@ -309,7 +309,7 @@ dowait = 2
 # labels: l=lofar; m=medium-deep; s=shallow; t=timing; g=Milky Way +/-5 in galactic latitude
 #         h=NCP that will be covered with hexagonal compound beam arrangement
 fields = Table(ascii.read(args.filename, format='fixed_width'))
-apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's')]
+apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's') | (fields['label'] == 'l')]
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
