@@ -164,3 +164,4 @@ M0141+3622,01:41:36,,+36:22:36,2020-03-05,09:31:12,2020-03-05,21:01:12,30,T,comp
 S2201+3130,22:01:48,,+31:30:45,2020-03-06,04:39:12,2020-03-06,16:09:12,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
 M1248+3356,12:48:39,,+33:56:40,2020-03-06,19:43:43,2020-03-07,07:13:43,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
 M0141+3356,01:41:59,,+33:56:40,2020-03-07,08:13:43,2020-03-07,19:43:43,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
+S1042+5324,10:42:53,,+53:24:05,2020-03-09,17:06:00,2020-03-10,04:36:00,30,T,compound,0,-,300,1280,/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template
