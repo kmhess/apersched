@@ -225,14 +225,40 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         else:
             first_field = avail_fields[(availability < 0.00) & (availability > -0.48)][0]
         sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
-        moon_position = get_moon(Time(new_obstime_utc, scale='utc'))
         # print("Sun position: {}".format(sun_position))
         check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-        check_moon = moon_position.separation(SkyCoord(first_field['hmsdms']))
-        if check_sun.value < args.sun_distance:
-            first_field = avail_fields[(availability < 0.0) & (availability > -0.48)][-1]
+        print("First choice {} too close to Sun: {} degs".format(first_field['hmsdms'],check_sun.value))
+        check_num = -1
+        while check_sun.value < args.sun_distance:
+            # print(check_num)
+            check_num += 1
+            more_fields = avail_fields[(availability < 0.0) & (availability > -0.48)]
+            check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
+            first_field = more_fields[check_sun.value > args.sun_distance][0]
+            # first_field = avail_fields[(availability < 0.0) & (availability > -0.48)][np.int(np.random.uniform(0,len(avail_fields[(availability < 0.0) & (availability > -0.48)])))]
             check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-            print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
+            if check_sun.value > args.sun_distance:
+                print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
+            if (check_sun.value < args.sun_distance) & (check_num == len(availability)):
+                more_fields = avail_fields[(availability < 1.2) & (availability > 0.6)]
+                check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
+                more_field = more_fields[check_sun.value > args.sun_distance][0]
+                # print(more_field)
+                more_field_availability = SkyCoord(more_field['hmsdms']).ra.hour - proposed_ra.hour
+                # print(more_field_availability)
+                while not np.any((more_field_availability < 0.00) & (more_field_availability > -0.48)):
+                    targ_wait += dowait
+                    new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
+                    new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
+                    proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
+                    more_field_availability = SkyCoord(more_fields['hmsdms']).ra.hour - proposed_ra.hour
+                    # more_fields_availability[more_fields_availability < -12] += 24
+                first_field = more_field
+                check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+                print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
+                if (check_sun.value < args.sun_distance):
+                    print("NO FIELDS THAT MEET SUN DISTANCE LIMIT CRITERIA.  TALK TO KELLEY. ENDING")
+                    exit()
 
         # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
         # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
@@ -573,4 +599,4 @@ for p in pol_cal:
     m.plot(xcal_ncp, ycal_ncp, 'o', markersize=6, color='green')
 plt.legend(loc=1)
 plt.title("Imaging survey fields {}".format(args.starttime_utc))
-plt.savefig(filename)
+plt.savefig(filename,bbox_inches='tight')
