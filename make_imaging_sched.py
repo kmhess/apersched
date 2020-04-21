@@ -71,7 +71,8 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         n = np.where(is_cal_up)[0][0]
         print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(new_lst)))
     # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
-    elif calib_wait >= 4.0 * 60:
+    # elif calib_wait >= 4.0 * 60:
+    elif calib_wait >= 6.0 * 60:
         after_cal = obstime_utc - datetime.timedelta(minutes=syswait)
         new_telescope_position = telescope_position
         i -= 1
@@ -189,12 +190,17 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
     availability = SkyCoord(np.array(avail_fields['hmsdms'])).ra.hour - proposed_ra.hour - test_slew_seconds / 3600.
     availability[availability < -12.] += 24.
 
+    sun_position = get_sun(Time(obstime_utc, scale='utc'))
+    sun_okay = np.array(sun_position.separation(SkyCoord(avail_fields['hmsdms'])).value)
+    # print(sun_okay)
+
     targ_wait = 0.     # minutes
-    wait_limit = 5.0  # hours
+    # wait_limit = 5.0  # hours
+    wait_limit = 8.0  # hours
 
     new_obstime_utc = obstime_utc
     # First check what is *already* up.  If nothing, then wait for something to rise.
-    while not np.any((availability < 0.00) & (availability > -0.48)):
+    while not np.any((availability < 0.00) & (availability > -0.48) & (sun_okay > args.sun_distance)):
         targ_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -203,7 +209,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         availability[availability < -12.] += 24.
     if (targ_wait != 0.) and (targ_wait <= wait_limit * 60.):
         total_wait += targ_wait
-        print("\tTarget not up, waiting {} minutes until LST: {}".format(targ_wait, str(new_lst)))
+        print("\tTarget not up (or sun issues), waiting {} minutes until LST: {}".format(targ_wait, str(new_lst)))
 
     if targ_wait <= wait_limit * 60.:
         # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
@@ -223,42 +229,42 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
             first_field = m101_field
             print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         else:
-            first_field = avail_fields[(availability < 0.00) & (availability > -0.48)][0]
-        sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
-        # print("Sun position: {}".format(sun_position))
-        check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-        print("First choice {} too close to Sun: {} degs".format(first_field['hmsdms'],check_sun.value))
-        check_num = -1
-        while check_sun.value < args.sun_distance:
-            # print(check_num)
-            check_num += 1
-            more_fields = avail_fields[(availability < 0.0) & (availability > -0.48)]
-            check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
-            first_field = more_fields[check_sun.value > args.sun_distance][0]
-            # first_field = avail_fields[(availability < 0.0) & (availability > -0.48)][np.int(np.random.uniform(0,len(avail_fields[(availability < 0.0) & (availability > -0.48)])))]
-            check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-            if check_sun.value > args.sun_distance:
-                print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
-            if (check_sun.value < args.sun_distance) & (check_num == len(availability)):
-                more_fields = avail_fields[(availability < 1.2) & (availability > 0.6)]
-                check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
-                more_field = more_fields[check_sun.value > args.sun_distance][0]
-                # print(more_field)
-                more_field_availability = SkyCoord(more_field['hmsdms']).ra.hour - proposed_ra.hour
-                # print(more_field_availability)
-                while not np.any((more_field_availability < 0.00) & (more_field_availability > -0.48)):
-                    targ_wait += dowait
-                    new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
-                    new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-                    proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
-                    more_field_availability = SkyCoord(more_fields['hmsdms']).ra.hour - proposed_ra.hour
-                    # more_fields_availability[more_fields_availability < -12] += 24
-                first_field = more_field
-                check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-                print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
-                if (check_sun.value < args.sun_distance):
-                    print("NO FIELDS THAT MEET SUN DISTANCE LIMIT CRITERIA.  TALK TO KELLEY. ENDING")
-                    exit()
+            first_field = avail_fields[(availability < 0.00) & (availability > -0.48) * (sun_okay > args.sun_distance)][0]
+        # sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
+        # # print("Sun position: {}".format(sun_position))
+        # check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        # print("First choice {} too close to Sun: {} degs".format(first_field['hmsdms'],check_sun.value))
+        # check_num = -1
+        # while check_sun.value < args.sun_distance:
+        #     # print(check_num)
+        #     check_num += 1
+        #     more_fields = avail_fields[(availability < 0.0) & (availability > -0.48)]
+        #     check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
+        #     first_field = more_fields[check_sun.value > args.sun_distance][0]
+        #     # first_field = avail_fields[(availability < 0.0) & (availability > -0.48)][np.int(np.random.uniform(0,len(avail_fields[(availability < 0.0) & (availability > -0.48)])))]
+        #     check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        #     if check_sun.value > args.sun_distance:
+        #         print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
+        #     if (check_sun.value < args.sun_distance) & (check_num == len(availability)):
+        #         more_fields = avail_fields[(availability < 1.2) & (availability > 0.6)]
+        #         check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
+        #         more_field = more_fields[check_sun.value > args.sun_distance][0]
+        #         # print(more_field)
+        #         more_field_availability = SkyCoord(more_field['hmsdms']).ra.hour - proposed_ra.hour
+        #         # print(more_field_availability)
+        #         while not np.any((more_field_availability < 0.00) & (more_field_availability > -0.48)):
+        #             targ_wait += dowait
+        #             new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
+        #             new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
+        #             proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
+        #             more_field_availability = SkyCoord(more_fields['hmsdms']).ra.hour - proposed_ra.hour
+        #             # more_fields_availability[more_fields_availability < -12] += 24
+        #         first_field = more_field
+        #         check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+        #         print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
+        #         if (check_sun.value < args.sun_distance):
+        #             print("NO FIELDS THAT MEET SUN DISTANCE LIMIT CRITERIA.  TALK TO KELLEY. ENDING")
+        #             exit()
 
         # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
         # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
@@ -305,7 +311,7 @@ parser.add_argument('-s', "--starttime_utc", default="2019-07-01 08:00:00",
 parser.add_argument('-l', "--schedule_length", default=7.0,
                     help="Number of days to schedule (can be float; default: %(default)s).",
                     type=float)
-parser.add_argument('-d', "--sun_distance", default=30.0,
+parser.add_argument('-d', "--sun_distance", default=45.0,
                     help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
 parser.add_argument('-r', "--repeat_m101",
