@@ -72,12 +72,14 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(new_lst)))
     # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
     # elif calib_wait >= 4.0 * 60:
-    elif calib_wait >= 6.0 * 60:
+    elif calib_wait >= 8.0 * 60:
         after_cal = obstime_utc - datetime.timedelta(minutes=syswait)
         new_telescope_position = telescope_position
         i -= 1
-        # If can't do any pol at beginning, first must be a flux cal:
-        next_cal = 'flux'
+        # If can't do any pol at beginning, first must be a flux cal
+        # (if statement untested; trying to fix skipping pol cal when this happens in the middle!):
+        if i == 1:
+            next_cal = 'flux'
         print("Must wait {} hours for calibrator to rise.  Instead, go directly to target.".format(calib_wait/60.))
         print("\tIf this appears anywhere other than beginning of scheduling block, probably need to expanding "
               "options in pointing file.")
@@ -192,7 +194,6 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
 
     sun_position = get_sun(Time(obstime_utc, scale='utc'))
     sun_okay = np.array(sun_position.separation(SkyCoord(avail_fields['hmsdms'])).value)
-    # print(sun_okay)
 
     targ_wait = 0.     # minutes
     # wait_limit = 5.0  # hours
@@ -230,6 +231,9 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
             print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         else:
             first_field = avail_fields[(availability < 0.00) & (availability > -0.48) * (sun_okay > args.sun_distance)][0]
+            check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
+            if check_sun.value < 50.:
+                print("\tField is THIS close to Sun: {}".format(check_sun))
         # sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
         # # print("Sun position: {}".format(sun_position))
         # check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
