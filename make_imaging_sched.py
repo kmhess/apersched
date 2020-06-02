@@ -38,6 +38,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     # Note ha_limit[1:2] depend on length of calibration!
     syswait = 2.0  # minutes
     obstime = (mins_per_beam + syswait) * 40. - syswait  # minutes
+    sun_position = get_sun(Time(obstime_utc, scale='utc'))
     if next_cal == 'flux':
         calibrators = flux_cal
         names = flux_names
@@ -48,23 +49,20 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         names = pol_names
         type_cal = 'Polarization'
         ha_limit = [-3.3, 3.3 - obstime / 60., - 1.0]  # Entry 2 is hardcoded for 5 min per beam
-    is_cal_up = [(current_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
-                 (current_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
-                 # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
-
+    is_cal_up = np.array([(current_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
+                 (current_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (current_lst.hour - calibrators[1].ra.hour < ha_limit[2])])
+    is_sundist_okay = np.array([sun_position.separation(calibrators[0]).value > calib_sun_dist,
+                                sun_position.separation(calibrators[1]).value > calib_sun_dist])
     calib_wait = 0
     new_obstime_utc = obstime_utc
 
     # Wait for calibrator to be at least an hour above the observing horizon, or not shadowed.
-    while not np.any(is_cal_up):  # and (calib_wait < 6. * 60.): # and (not is3c286):
+    while not np.any(is_cal_up * is_sundist_okay):  # and (calib_wait < 6. * 60.): # and (not is3c286):
         calib_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
         is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
                      (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
-                     # for n in [0,1]]   # Limit to the first two (primary) calibrators for now.
-        # diff = [new_lst.hour - calibrators[n].ra.hour for n in [0,1]]
-        # print("still here. waiting {} mins. LST: {}.  Difference: {}".format(calib_wait,new_lst,diff))
     n = np.where(is_cal_up)[0][0]
     if calib_wait != 0 and calib_wait < 4.0 * 60:
         total_wait += calib_wait
@@ -104,8 +102,6 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     write_to_csv(csvfile, names[n], calibrators[n], new_obstime_utc, after_cal)
 
     print("Scan {} observed {} calibrator {}.".format(i, type_cal, names[n]))
-    sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
-    # print("Sun position: {}".format(sun_position))
     check_sun = sun_position.separation(calibrators[n])
     if check_sun.value < calib_sun_dist:
         print("\tWARNING: {} is THIS close to Sun: {:5.2f}".format(names[n], check_sun))
@@ -197,11 +193,11 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
 
     targ_wait = 0.     # minutes
     # wait_limit = 5.0  # hours
-    wait_limit = 8.0  # hours
+    wait_limit = 10.0  # hours
 
     new_obstime_utc = obstime_utc
     # First check what is *already* up.  If nothing, then wait for something to rise.
-    while not np.any((availability < 0.00) & (availability > -0.48) & (sun_okay > args.sun_distance)):
+    while not np.any((availability < 0.00) & (availability > -0.40) & (sun_okay > args.sun_distance)):
         targ_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -214,13 +210,13 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
 
     if targ_wait <= wait_limit * 60.:
         # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
-        if 'M1403+5324' in avail_fields[(availability < 0.00) & (availability > -0.48)]['name']:
+        if 'M1403+5324' in avail_fields[(availability < 0.00) & (availability > -0.40)]['name']:
             first_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
             print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         elif 'M1403+5324' in avail_fields[(availability < 1.00) & (availability > 0)]['name']:
             m101_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
             m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
-            while not (m101_availability < 0.00) & (m101_availability > -0.48):
+            while not (m101_availability < 0.00) & (m101_availability > -0.40):
                 targ_wait += dowait
                 new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
                 new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -230,7 +226,7 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
             first_field = m101_field
             print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         else:
-            first_field = avail_fields[(availability < 0.00) & (availability > -0.48) * (sun_okay > args.sun_distance)][0]
+            first_field = avail_fields[(availability < 0.00) & (availability > -0.40) & (sun_okay > args.sun_distance)][0]
             check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
             if check_sun.value < 50.:
                 print("\tField is THIS close to Sun: {}".format(check_sun))
@@ -349,7 +345,7 @@ apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's') | (f
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
-weights[apertif_fields['label'] == 'l'] = 3
+weights[apertif_fields['label'] == 'l'] = 4
 
 # Add "weights" column to table.
 apertif_fields['weights'] = weights
