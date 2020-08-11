@@ -63,10 +63,12 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
         is_cal_up = [(new_lst.hour - calibrators[0].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[0].ra.hour < ha_limit[1]),
                      (new_lst.hour - calibrators[1].ra.hour > ha_limit[0]) and (new_lst.hour - calibrators[1].ra.hour < ha_limit[2])]
-    n = np.where(is_cal_up)[0][0]
-    if calib_wait != 0 and calib_wait < 4.0 * 60:
+    n = np.where(is_cal_up * is_sundist_okay)[0][0]
+    ##### EDITABLE: Can change the number of hours the program will wait for a calibrator #####
+    # if calib_wait != 0 and calib_wait < 4.0 * 60:
+    if calib_wait != 0 and calib_wait < 6.0 * 60:
         total_wait += calib_wait
-        n = np.where(is_cal_up)[0][0]
+        # n = np.where(is_cal_up * is_sundist_okay)[0][0]
         print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(new_lst)))
     # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
     # elif calib_wait >= 4.0 * 60:
@@ -93,7 +95,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
 
     # Calculate appropriate observe time for the calibrator and observe it.
     obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
-    if n == 1:
+    if (n == 1) & (next_cal == 'pol'):
         obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
     if i == 1:
@@ -116,6 +118,7 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     return i, after_cal, new_telescope_position, total_wait, next_cal
 
 
+# This will probably never be used...kept for posterity or until some has the courage to delete it and make -b redundant.
 def do_calibration(i, obstime_utc, telescope_position, csvfile, total_wait):
     current_lst = Time(obstime_utc).sidereal_time('apparent', westerbork().lon)
     is3c147 = np.abs(current_lst.hour - flux_cal[0].ra.hour < 5.0)
@@ -192,12 +195,14 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
     sun_okay = np.array(sun_position.separation(SkyCoord(avail_fields['hmsdms'])).value)
 
     targ_wait = 0.     # minutes
+    ##### EDITABLE: Will control the maximum wait time for a target before it gives up and looks for a calibrator #####
     # wait_limit = 5.0  # hours
     wait_limit = 10.0  # hours
 
     new_obstime_utc = obstime_utc
     # First check what is *already* up.  If nothing, then wait for something to rise.
-    while not np.any((availability < 0.00) & (availability > -0.40) & (sun_okay > args.sun_distance)):
+    ##### If target is passing it's HA limit, adjust availability numbers (especially the second one) #####
+    while not np.any((availability < -0.02) & (availability > -0.40) & (sun_okay > args.sun_distance)):
         targ_wait += dowait
         new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
         new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -210,13 +215,13 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
 
     if targ_wait <= wait_limit * 60.:
         # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
-        if 'M1403+5324' in avail_fields[(availability < 0.00) & (availability > -0.40)]['name']:
+        if 'M1403+5324' in avail_fields[(availability < -0.02) & (availability > -0.40)]['name']:
             first_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
             print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
-        elif 'M1403+5324' in avail_fields[(availability < 1.00) & (availability > 0)]['name']:
+        elif 'M1403+5324' in avail_fields[(availability < 1.00) & (availability > -0.02)]['name']:
             m101_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
             m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
-            while not (m101_availability < 0.00) & (m101_availability > -0.40):
+            while not (m101_availability < -0.02) & (m101_availability > -0.40):
                 targ_wait += dowait
                 new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
                 new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
@@ -226,45 +231,10 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
             first_field = m101_field
             print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         else:
-            first_field = avail_fields[(availability < 0.00) & (availability > -0.40) & (sun_okay > args.sun_distance)][0]
+            first_field = avail_fields[(availability < -0.02) & (availability > -0.40) & (sun_okay > args.sun_distance)][0]
             check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
             if check_sun.value < 50.:
                 print("\tField is THIS close to Sun: {}".format(check_sun))
-        # sun_position = get_sun(Time(new_obstime_utc, scale='utc'))
-        # # print("Sun position: {}".format(sun_position))
-        # check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-        # print("First choice {} too close to Sun: {} degs".format(first_field['hmsdms'],check_sun.value))
-        # check_num = -1
-        # while check_sun.value < args.sun_distance:
-        #     # print(check_num)
-        #     check_num += 1
-        #     more_fields = avail_fields[(availability < 0.0) & (availability > -0.48)]
-        #     check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
-        #     first_field = more_fields[check_sun.value > args.sun_distance][0]
-        #     # first_field = avail_fields[(availability < 0.0) & (availability > -0.48)][np.int(np.random.uniform(0,len(avail_fields[(availability < 0.0) & (availability > -0.48)])))]
-        #     check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-        #     if check_sun.value > args.sun_distance:
-        #         print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
-        #     if (check_sun.value < args.sun_distance) & (check_num == len(availability)):
-        #         more_fields = avail_fields[(availability < 1.2) & (availability > 0.6)]
-        #         check_sun = sun_position.separation(SkyCoord(more_fields['hmsdms']))
-        #         more_field = more_fields[check_sun.value > args.sun_distance][0]
-        #         # print(more_field)
-        #         more_field_availability = SkyCoord(more_field['hmsdms']).ra.hour - proposed_ra.hour
-        #         # print(more_field_availability)
-        #         while not np.any((more_field_availability < 0.00) & (more_field_availability > -0.48)):
-        #             targ_wait += dowait
-        #             new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
-        #             new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
-        #             proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
-        #             more_field_availability = SkyCoord(more_fields['hmsdms']).ra.hour - proposed_ra.hour
-        #             # more_fields_availability[more_fields_availability < -12] += 24
-        #         first_field = more_field
-        #         check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
-        #         print("\tShifted pointings. New field is THIS close to Sun: {}".format(check_sun))
-        #         if (check_sun.value < args.sun_distance):
-        #             print("NO FIELDS THAT MEET SUN DISTANCE LIMIT CRITERIA.  TALK TO KELLEY. ENDING")
-        #             exit()
 
         # NOTE SLEW TIME IS CALCULATED TO THE *OBSERVING* HORIZON, NOT TO THE NEW RA!
         # TELESCOPE SHOULD MOVE TO HORIZON AND WAIT!!!
@@ -341,11 +311,13 @@ dowait = 2
 # labels: l=lofar; m=medium-deep; s=shallow; t=timing; g=Milky Way +/-5 in galactic latitude
 #         h=NCP that will be covered with hexagonal compound beam arrangement
 fields = Table(ascii.read(args.filename, format='fixed_width'))
-apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's') | (fields['label'] == 'l')]
+apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's') | (fields['label'] == 'l') | (fields['label'] == 'o')]
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 10
-weights[apertif_fields['label'] == 'l'] = 4
+##### EDITABLE: Use different labels to control how areas of the Medium-deep are built up in diff parts of the sky #####
+weights[apertif_fields['label'] == 'l'] = 6
+weights[apertif_fields['label'] == 'o'] = 4
 
 # Add "weights" column to table.
 apertif_fields['weights'] = weights
@@ -354,6 +326,7 @@ apertif_fields['weights'] = weights
 
 #
 # IF YOU WANT TO EDIT THE FIELDS AVAILABLE TO THE SCHEDULER BEYOND THE INPUT FILE, DO THAT HERE:
+##### Actually, now I do this by hand with check_footprint.ipynb and the weights specified above  #####
 
 # # Get rid of all except HETDEX in Spring sky (for 4 week operations rehearsal)
 # apertif_fields=apertif_fields[(apertif_fields['ra'] < 6*15.) | (apertif_fields['ra'] > 20.*15.) |
