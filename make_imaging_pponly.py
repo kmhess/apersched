@@ -300,6 +300,19 @@ except IOError:
     print("If file of previously scheduled observations was requested, it does not exist. Continuing.")
     scheduled_coords = []
 
+# Add back fields that were deem failed in order to schedule again:
+try:
+    failed = Table.read('./ancillary_data/failed_obs.csv')
+    for fail in failed:
+        if fail['name'] in apertif_fields['name']:
+            i = np.where(apertif_fields['name'] == fail['name'])
+            apertif_fields['weights'][i] += 1
+            print(fail['name'],apertif_fields['weights'][i])
+    print(apertif_fields[apertif_fields['weights']>0])
+except IOError:
+    print("No list of failed observations exists. Continuing")
+
+
 # Try to repeat M101 once at users request by appropriately modifying the weights after they are read in from the pointing file.
 if args.repeat_m101:
     if apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] > 0:
