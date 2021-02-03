@@ -10,7 +10,7 @@ import datetime
 from .calibrators import *
 
 _int, lo, sub1, _type, weight, beam, sub2, centfreq, intent, switch_type, freqmode = \
-     '30', '4800', '64', 'T', 'compound', '0', '320', '1280', 'compound', '-', '300'
+     '30', '4800', '64', 'T', 'compound', '0', '320', '1370', 'compound', '-', '300'
 template = '/opt/apertif/share/parsets/parset_start_observation_atdb_SubbandPhaseCorrection.template'
 
 ###################################################################
@@ -33,7 +33,7 @@ def write_to_csv(writer, source_name, source_pos, start_datetime, end_datetime, 
         all_cols = [source, ra, '', dec, date1, time1, date2, time2, '10', _type, weight, beam, switch_type, freqmode,
                     centfreq, template]
     else:
-        all_cols = [source, ra, '', dec, date1, time1, date2, time2, '1280', 'square_39p1', '0', '39', str(pulsar), '0']
+        all_cols = [source, ra, '', dec, date1, time1, date2, time2, '1370', 'square_39p1', '0', '39', str(pulsar), '0']
     writer.writerow(all_cols)
 
 
