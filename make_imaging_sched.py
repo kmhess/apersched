@@ -66,13 +66,13 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
     n = np.where(is_cal_up * is_sundist_okay)[0][0]
     ##### EDITABLE: Can change the number of hours the program will wait for a calibrator #####
     # if calib_wait != 0 and calib_wait < 4.0 * 60:
-    if calib_wait != 0 and calib_wait < 6.0 * 60:
+    if calib_wait != 0 and calib_wait < 9.0 * 60:
         total_wait += calib_wait
         # n = np.where(is_cal_up * is_sundist_okay)[0][0]
         print("\tCalibrator not up, waiting {} minutes until LST: {}.".format(calib_wait, str(new_lst)))
     # The commented part is hopefully obsolete with the new calibrator.py and observing strategy, but there's still a bad starting point in the sky
     # elif calib_wait >= 4.0 * 60:
-    elif calib_wait >= 8.0 * 60:
+    elif calib_wait >= 9.0 * 60:
         after_cal = obstime_utc - datetime.timedelta(minutes=syswait)
         new_telescope_position = telescope_position
         i -= 1
@@ -95,8 +95,8 @@ def do_calibration_40b(i, obstime_utc, telescope_position, csvfile, total_wait, 
 
     # Calculate appropriate observe time for the calibrator and observe it.
     obstime = (mins_per_beam + syswait) * 40. - syswait    # <mins_per_beam> minutes per beam, 2 min wait
-    if (n == 1) & (next_cal == 'pol'):
-        obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
+    # if (n == 1) & (next_cal == 'pol'):
+    #     obstime = (5.0 + syswait) * 40. - syswait  # force 5 minutes per beam, 2 min wait on calibs with natural gap before target
     after_cal = observe_calibrator(new_obstime_utc, obstime=obstime)
     if i == 1:
         write_to_csv(csvfile, 'imaging_start', calibrators[n], new_obstime_utc - datetime.timedelta(minutes=3.0),
@@ -214,22 +214,29 @@ def do_target_observation(i, obstime_utc, telescope_position, csvfile, total_wai
         print("\tTarget not up (or sun issues), waiting {} minutes until LST: {}".format(targ_wait, str(new_lst)))
 
     if targ_wait <= wait_limit * 60.:
-        # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
-        if 'M1403+5324' in avail_fields[(availability < -0.02) & (availability > -0.40)]['name']:
-            first_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
-            print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
-        elif 'M1403+5324' in avail_fields[(availability < 1.00) & (availability > -0.02)]['name']:
-            m101_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
-            m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
-            while not (m101_availability < -0.02) & (m101_availability > -0.40):
+        # # Choose M101 field first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
+        # if 'M1403+5324' in avail_fields[(availability < -0.02) & (availability > -0.40)]['name']:
+        #     first_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
+        #     print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
+        # elif 'M1403+5324' in avail_fields[(availability < 1.00) & (availability > -0.02)]['name']:
+        #     m101_field = avail_fields[avail_fields['name'] == 'M1403+5324'][0]
+        # Choose 3*IHV first if available or within a 1 hour wait AND (before this function) if users had requested it in args.repeat_m101
+        if 'M2214+3130' in avail_fields[(availability < -0.02) & (availability > -0.40)]['name']:
+            first_field = avail_fields[avail_fields['name'] == 'M2214+3130'][0]
+            print("*** M2214+3130 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
+        elif 'M2214+3130' in avail_fields[(availability < 1.00) & (availability > -0.02)]['name']:
+            ihv3_field = avail_fields[avail_fields['name'] == 'M2214+3130'][0]
+            ihv3_availabillity = SkyCoord(ihv3_field['hmsdms']).ra.hour - proposed_ra.hour
+            while not (ihv3_availabillity < -0.02) & (ihv3_availabillity > -0.40):
                 targ_wait += dowait
                 new_obstime_utc = wait_for_rise(new_obstime_utc, waittime=dowait)
                 new_lst = Time(new_obstime_utc).sidereal_time('apparent', westerbork().lon)
                 proposed_ra = (new_lst + Longitude('6h')).wrap_at(360 * u.deg)
-                m101_availability = SkyCoord(m101_field['hmsdms']).ra.hour - proposed_ra.hour
+                ihv3_availabillity = SkyCoord(ihv3_field['hmsdms']).ra.hour - proposed_ra.hour
                 # m101_availability[m101_availability < -12] += 24
-            first_field = m101_field
-            print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
+            first_field = ihv3_field
+            # print("*** M1403+5324 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
+            print("*** M2214+3130 OBSERVED!  WAIT A MONTH TO SCHEDULE AGAIN! ***")
         else:
             first_field = avail_fields[(availability < -0.02) & (availability > -0.40) & (sun_okay > args.sun_distance)][0]
             check_sun = sun_position.separation(SkyCoord(first_field['hmsdms']))
@@ -284,8 +291,10 @@ parser.add_argument('-l', "--schedule_length", default=7.0,
 parser.add_argument('-d', "--sun_distance", default=45.0,
                     help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
-parser.add_argument('-r', "--repeat_m101",
-                    help="If option is included, Try to schedule the M101 field once this time. Works until it's been observed to MDS depth.",
+# parser.add_argument('-r', "--repeat_m101",
+#                     help="If option is included, Try to schedule the M101 field once this time. Works until it's been observed to MDS depth.",
+parser.add_argument('-r', "--repeat_3ihv",
+                    help="If option is included, Try to schedule the 3*IHV field once this time. Works until it's been observed to MDS depth.",
                     action='store_true')
 parser.add_argument('-a', "--check_atdb",
                     help="If option is included, *DO NOT* check ATDB for previous observations.",
@@ -314,10 +323,10 @@ fields = Table(ascii.read(args.filename, format='fixed_width'))
 apertif_fields = fields[(fields['label'] == 'm') | (fields['label'] == 's') | (fields['label'] == 'l') | (fields['label'] == 'o')]
 weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
-weights[apertif_fields['label'] == 'm'] = 10
+weights[apertif_fields['label'] == 'm'] = 1
 ##### EDITABLE: Use different labels to control how areas of the Medium-deep are built up in diff parts of the sky #####
-weights[apertif_fields['label'] == 'l'] = 6
-weights[apertif_fields['label'] == 'o'] = 4
+weights[apertif_fields['label'] == 'l'] = 1
+weights[apertif_fields['label'] == 'o'] = 1
 
 # Add "weights" column to table.
 apertif_fields['weights'] = weights
@@ -375,14 +384,34 @@ except IOError:
     print("If file of previously scheduled observations was requested, it does not exist. Continuing.")
     scheduled_coords = []
 
-# Try to repeat M101 once at users request by appropriately modifying the weights after they are read in from the pointing file.
-if args.repeat_m101:
-    if apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] > 0:
-        apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] = 1
+# Add back fields that were deem failed in order to schedule again:
+try:
+    failed = Table.read('./ancillary_data/failed_obs.csv')
+    for fail in failed:
+        if fail['name'] in apertif_fields['name']:
+            i = np.where(apertif_fields['name'] == fail['name'])
+            apertif_fields['weights'][i] += 1
+    #         print(fail['name'],apertif_fields['weights'][i])
+    # print(apertif_fields[apertif_fields['weights']>0])
+except IOError:
+    print("No list of failed observations exists. Continuing")
+
+# # Try to repeat M101 once at users request by appropriately modifying the weights after they are read in from the pointing file.
+# if args.repeat_m101:
+#     if apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] > 0:
+#         apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] = 1
+#     else:
+#         print("M1403+5324 with M101 & scintillating source already observed to full depth. Will not force to schedule.")
+# else:
+#     apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] = 0
+# Try to repeat 3*IHV once at users request by appropriately modifying the weights after they are read in from the pointing file.
+if args.repeat_3ihv:
+    if apertif_fields['weights'][apertif_fields['name'] == 'M2214+3130'] > 0:
+        apertif_fields['weights'][apertif_fields['name'] == 'M2214+3130'] = 1
     else:
-        print("M1403+5324 with M101 & scintillating source already observed to full depth. Will not force to schedule.")
+        print("M2214+3130 with 3 scintillating sources already observed to full depth. Will not force to schedule.")
 else:
-    apertif_fields['weights'][apertif_fields['name'] == 'M1403+5324'] = 0
+    apertif_fields['weights'][apertif_fields['name'] == 'M2214+3130'] = 0
 
 # Append schedule to end of previously existing file and tell the user what's happening.
 if os.path.isfile(args.previous_obs) & args.copy_previous:
@@ -406,7 +435,7 @@ print("Will shift pointings if Sun is within {} degrees.".format(args.sun_distan
 # Estimate the telescope starting position as on the meridian (approximately parked)
 telescope_position = SkyCoord(ra=Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
 current_lst = Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon)
-next_cal = 'flux'
+next_cal = 'pol'
 if (current_lst.hour - pol_cal[1].ra.hour > -5.0) and (current_lst.hour - pol_cal[1].ra.hour < 0.1):
     next_cal = 'pol'
 
