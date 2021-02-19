@@ -229,6 +229,9 @@ parser.add_argument('-l', "--schedule_length", default=7.0,
 parser.add_argument('-d', "--sun_distance", default=45.0,
                     help="Minimum allowed distance in decimal degrees to Sun (default: %(default)s).",
                     type=float)
+parser.add_argument('-x', '--pol_cal_true',
+                    help='Force program to start with a polarization calibrator rather than flux calibrator.',
+                    action='store_true')
 parser.add_argument('-r', "--repeat_m101",
                     help="If option is included, Try to schedule the M101 field once this time. Works until it's been observed to MDS depth.",
                     action='store_true')
@@ -307,8 +310,6 @@ try:
         if fail['name'] in apertif_fields['name']:
             i = np.where(apertif_fields['name'] == fail['name'])
             apertif_fields['weights'][i] += 1
-            print(fail['name'],apertif_fields['weights'][i])
-    print(apertif_fields[apertif_fields['weights']>0])
 except IOError:
     print("No list of failed observations exists. Continuing")
 
@@ -345,6 +346,8 @@ print("Will shift pointings if Sun is within {} degrees.".format(args.sun_distan
 telescope_position = SkyCoord(ra=Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon), dec='50d00m00s')
 current_lst = Time(args.starttime_utc).sidereal_time('apparent', westerbork().lon)
 next_cal = 'flux'
+if args.pol_cal_true:
+    next_cal = 'pol'
 if (current_lst.hour - pol_cal[1].ra.hour > -5.0) and (current_lst.hour - pol_cal[1].ra.hour < 0.1):
     next_cal = 'pol'
 
