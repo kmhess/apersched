@@ -328,7 +328,7 @@ weights = np.zeros(len(apertif_fields))
 weights[apertif_fields['label'] == 's'] = 1
 weights[apertif_fields['label'] == 'm'] = 1
 ##### EDITABLE: Use different labels to control how areas of the Medium-deep are built up in diff parts of the sky #####
-weights[apertif_fields['label'] == 'l'] = 1
+weights[apertif_fields['label'] == 'l'] = 2
 weights[apertif_fields['label'] == 'o'] = 1
 
 # Add "weights" column to table.
