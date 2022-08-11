@@ -118,6 +118,8 @@ python3 make_imaging_sched.py -a -b -o test_run
 
 If you have no way to connect to ATDB, always run with the -a option.
 
+Noise diode was never commissioned, so always run with -b option to do 40 beam calibration.
+
 ## Behavior
 
 For imaging, the program selects the lowest Dec field available, however if the Sun is closer to a target field than a user specified amount, the program selects the highest Dec field available.  At least in the beginning of the survey period, in most cases, this will give at least 20 more degrees separation.  If the Sun is within the user specified distance of a calibrator, the program will print a WARNING, but it will still schedule the calibrator.
