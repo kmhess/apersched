@@ -75,7 +75,7 @@ optional arguments:
                         Minimum declination in decimal degrees used for survey pointings (default: 10.0).
 ```
 
-Modified versions of the original code were used as the Apertif imaging surveys progressed to prioritize different sky areas and their preferred calibrator strategies:
+Modified versions of the original code were used as the Apertif imaging surveys progressed to prioritize different sky areas and their preferred calibrator strategies.  These are now found in the `scripts/` directory:
 * `make_imaging_hatlas.py` - Observe only medium-deep pointings in the H-ATLAS part of the sky.  Alternate flux and pol cal each time.
 * `make_imaging_pponly.py` - Observe only medium-deep pointings in the Perseus-Pisces part of the sky. Visit both flux and pol cal between every observation.
 * `make_imaging_priority.py` - Prioritize very select fields at the very end of survey operations.
@@ -119,6 +119,8 @@ python3 make_imaging_sched.py -a -b -o test_run
 If you have no way to connect to ATDB, always run with the -a option.
 
 Noise diode was never commissioned, so always run with -b option to do 40 beam calibration.
+
+One may wish to disable (comment out) Basemap for plotting in the scripts as it is difficult to install and not currently well maintained.  An alternative can be found in `scripts/footprint_check_new.ipynb` which uses the Kapteyn python package.
 
 ## Behavior
 
