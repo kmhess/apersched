@@ -1,4 +1,6 @@
 # apersched
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6988465.svg)](https://doi.org/10.5281/zenodo.6988465)
+
 Creates an observing schedule for Apertif imaging or timing surveys.
 
 The programs read in a list of possible pointings.  It then calls the module atdbquery to query the ATDB for previously completed observations and removes them from the list of possible pointings.  The program then generates an observing schedule alternating between calibrators and target pointings for a user specified length of time.  The schedule is output as a csv file, and is also accompanied with a .png image which shows which fields have been selected (as well as those which were previously observed, or previously scheduled).
@@ -135,13 +137,13 @@ For imaging, if the RA range of targets is so restricted that it takes more than
 ## Version history
 
 * apersched v1.0.0
-  * Released TBD 2022
+  * Released 13 August 2022
   
 ## Authors
 Kelley M. Hess, Helga Dénes, Leon Oostrum, and Betsey Adams
 
 ## Reference
-* Zenodo link (TBD)
+* Zenodo DOI: https://doi.org/10.5281/zenodo.6988464
 * Hess et al (in prep) - Apertif survey description paper. 
 
 ## Copyright and license
